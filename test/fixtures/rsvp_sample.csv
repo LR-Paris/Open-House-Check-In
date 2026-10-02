@@ -1,0 +1,15 @@
+Record ID,First Name,Last Name,Email,Company Name,Job Title,Open House RSVP,Day(s) of Attendance,Time of Attendance,People in group,Your Sales Rep
+1001,Sarah,Kim,sarah.kim@example.com,Maison Clair,Buyer,I'm Going,Oct 7,10:00am - 11:00am,2,Piper Bucholz
+1002,Alex,Rivera,alex.a@example.com,Company A,,I'm Going,Oct 6,3:00pm - 4:00pm,3,
+1003,Alex,Rivera,alex.b@example.com,Company B,,I'm Going,Oct 8,1:00pm - 2:00pm,1,
+1004,Jordan,Blake,jordan@example.com,Atelier Nord,,I'm Going,Oct 6,9:00am - 10:00am,1,
+1005,Priya,Nair,priya@example.com,Haus Verde,,I'm Going,Oct 8,5:00pm - 6:00pm,4,
+1006,Marcus,Chen,marcus@example.com,Ligne Douze,,I'm Going,Oct 7,2:00pm - 3:00pm,2,
+1007,Hélène,Dupré,helene@example.com,"Dupré, Fils & Cie",Directrice,I’m Going,Oct 6;Oct 7,11:00am – 12:00pm,2,
+1008,Dana,Decline,dana@example.com,Nowhere Ltd,,"Sorry, I can't make it",Sorry I can't make it,9:00am - 10:00am,1,
+1009,Noah,Noday,noah@example.com,Somewhere Inc,,I'm Going,,12:00pm - 1:00pm,2,
+1010,,,nobody@example.com,,,I'm Going,Oct 6,9:00am - 10:00am,1,
+1011,Zed,Formula,zed@example.com,"=HYPERLINK(""http://x"")",,I'm Going,Oct 8,6:00pm - 6:30pm,0,
+1012,"Mary ""MJ""",Jones,mj@example.com,"Line One
+Line Two Co",,I'm Going,Oct 6,4:00pm - 5:00pm,,
+1013,Sam,Weekday,sam@example.com,Week Co,,I'm Going,Oct 6;Saturday,7:00pm - 8:00pm,2,

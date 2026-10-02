@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LR Paris Open House — Sign-In</title>
+<meta name="theme-color" content="#F7F6F3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Check-In">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no, email=no, address=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+/* Brand fonts are NOT shipped (web licence unconfirmed). The stacks below fall back to fonts built into iPadOS.
+   If the licence is confirmed, see README › Brand fonts. */
+:root{
+  --navy:#021E42; --blue:#0024BC; --beige:#F7F6F3; --white:#FFFFFF;
+  --sky:#AAC8E6; --orange:#FF6423;
+  --bg:var(--beige); --fg:#121212; --head:var(--navy); --muted:rgba(2,30,66,.62);
+  --logo:var(--navy); --rule:rgba(2,30,66,.14);
+  --field-bg:var(--white); --field-border:rgba(2,30,66,.22); --field-focus:var(--blue);
+  --btn-bg:var(--navy); --btn-fg:var(--white); --btn2-border:var(--navy); --btn2-fg:var(--navy);
+  --card-bg:var(--white); --card-border:rgba(2,30,66,.14); --card-hover:rgba(0,36,188,.06);
+  --sans:"Trade Gothic Next","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --cond:"Trade Gothic Next HvCn","HelveticaNeue-CondensedBlack","Helvetica Neue Condensed Black","Helvetica Neue","Arial Narrow",sans-serif;
+  --serif:"IvyOra Display",Baskerville,"Times New Roman",serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:var(--navy); --fg:#fff; --head:#fff; --muted:rgba(255,255,255,.66);
+    --logo:#fff; --rule:rgba(255,255,255,.18);
+    --field-bg:rgba(255,255,255,.06); --field-border:rgba(255,255,255,.28); --field-focus:var(--sky);
+    --btn-bg:var(--white); --btn-fg:var(--navy); --btn2-border:#fff; --btn2-fg:#fff;
+    --card-bg:rgba(255,255,255,.05); --card-border:rgba(255,255,255,.18); --card-hover:rgba(255,255,255,.1);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:var(--navy); --fg:#fff; --head:#fff; --muted:rgba(255,255,255,.66);
+  --logo:#fff; --rule:rgba(255,255,255,.18);
+  --field-bg:rgba(255,255,255,.06); --field-border:rgba(255,255,255,.28); --field-focus:var(--sky);
+  --btn-bg:var(--white); --btn-fg:var(--navy); --btn2-border:#fff; --btn2-fg:#fff;
+  --card-bg:rgba(255,255,255,.05); --card-border:rgba(255,255,255,.18); --card-hover:rgba(255,255,255,.1);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%;overscroll-behavior:none;touch-action:manipulation}
+*,*::before,*::after{box-sizing:inherit}
+[hidden]{display:none!important}
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;margin:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:var(--sans);font-weight:400;font-size:19px;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;overscroll-behavior:none;display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+button,input,select,label,.pill,.result,.choice{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+button{font-family:inherit}
+
+/* Header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px clamp(20px,5vw,56px) 0}
+.logo{appearance:none;border:0;background:none;padding:12px 0;margin:0;cursor:pointer;width:clamp(150px,22vw,210px);color:var(--logo);display:block;-webkit-touch-callout:none;user-select:none}
+.logo svg{width:100%;height:auto;display:block}
+.chip{font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:var(--btn-bg);color:var(--btn-fg);padding:7px 11px;border-radius:999px;white-space:nowrap}
+
+/* Stage */
+.stage{flex:1 0 auto;width:100%;max-width:760px;margin:0 auto;padding:clamp(28px,6vh,72px) clamp(20px,5vw,56px) 40px;position:relative}
+.stage.wide{max-width:980px}
+.screen{display:none;animation:rise .42s cubic-bezier(.2,.7,.2,1) both}
+.screen.active{display:block}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+.eyebrow{font-family:var(--serif);font-style:italic;font-weight:300;font-size:clamp(17px,2.2vw,21px);color:var(--muted);margin:0 0 14px}
+h1{font-family:var(--cond);font-weight:800;font-stretch:condensed;text-transform:uppercase;letter-spacing:0;line-height:.95;font-size:clamp(44px,8.5vw,78px);color:var(--head);margin:0 0 22px}
+.lede{font-weight:300;font-size:clamp(19px,2.4vw,23px);margin:0 0 34px;max-width:38ch}
+.step{font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+
+/* Choice buttons */
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:560px){.choices{grid-template-columns:1fr}}
+.choice{appearance:none;border:1.5px solid var(--btn2-border);background:transparent;color:var(--btn2-fg);border-radius:14px;padding:30px 24px;min-height:150px;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;transition:transform .15s,background .15s,color .15s;font-family:inherit}
+.choice:active{transform:scale(.985);background:var(--card-hover)}
+.choice.primary{background:var(--btn-bg);color:var(--btn-fg);border-color:var(--btn-bg)}
+.choice .big{font-family:var(--cond);font-weight:800;font-stretch:condensed;text-transform:uppercase;font-size:clamp(28px,4.5vw,38px);line-height:.95;letter-spacing:0}
+.choice .small{font-weight:300;font-size:16px;opacity:.85;margin-top:14px}
+
+/* Fields */
+.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:560px){.row{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+label,.label{font-weight:700;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--head)}
+.req{color:var(--orange)}
+input,select,textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+input[type=text],input[type=email],input[type=password],select{appearance:none;font:inherit;font-weight:400;font-size:19px;padding:16px 18px;border-radius:10px;border:1.5px solid var(--field-border);background:var(--field-bg);color:var(--fg);min-height:58px;outline:none;transition:border-color .15s,box-shadow .15s;width:100%}
+input:focus,select:focus{border-color:var(--field-focus);box-shadow:0 0 0 4px rgba(0,36,188,.12)}
+.hint{font-weight:300;font-size:15px;color:var(--muted);margin:-4px 0 0}
+
+/* Pills */
+.pills{display:flex;flex-wrap:wrap;gap:10px}
+.pill{position:relative}
+.pill input{position:absolute;opacity:0;inset:0;width:100%;height:100%;cursor:pointer;margin:0}
+.pill span{display:inline-flex;align-items:center;min-height:52px;padding:0 18px;border-radius:999px;border:1.5px solid var(--field-border);background:var(--field-bg);font-weight:400;font-size:17px;transition:all .15s;user-select:none}
+.pill input:checked+span{background:var(--btn-bg);color:var(--btn-fg);border-color:var(--btn-bg)}
+.pill input:focus-visible+span{box-shadow:0 0 0 4px rgba(0,36,188,.18)}
+
+/* Select */
+.selectwrap{position:relative}
+.selectwrap::after{content:"";position:absolute;right:20px;top:50%;width:11px;height:11px;border-right:2px solid var(--head);border-bottom:2px solid var(--head);transform:translateY(-70%) rotate(45deg);pointer-events:none}
+select{padding-right:52px;cursor:pointer}
+select:invalid{color:var(--muted)}
+.reveal{animation:reveal .35s cubic-bezier(.2,.7,.2,1) both}
+@keyframes reveal{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+/* Stepper */
+.stepper{display:inline-flex;align-items:center;border:1.5px solid var(--field-border);border-radius:12px;background:var(--field-bg);overflow:hidden;align-self:flex-start}
+.stepper button{appearance:none;border:0;background:transparent;color:var(--head);font-weight:700;font-size:28px;width:64px;height:64px;cursor:pointer}
+.stepper button:active{background:var(--card-hover)}
+.stepper output{min-width:72px;text-align:center;font-family:var(--cond);font-weight:800;font-stretch:condensed;font-size:34px;color:var(--head)}
+
+/* Buttons */
+.actions{display:flex;gap:14px;flex-wrap:wrap;margin-top:34px;align-items:center}
+.btn{appearance:none;border:1.5px solid var(--btn-bg);background:var(--btn-bg);color:var(--btn-fg);font-family:var(--cond);font-weight:800;font-stretch:condensed;text-transform:uppercase;letter-spacing:0;font-size:22px;padding:0 34px;min-height:66px;border-radius:12px;cursor:pointer;transition:transform .15s,opacity .15s;flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;text-align:center}
+.btn:active{transform:scale(.985)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--btn2-fg);border-color:var(--btn2-border);flex:0 0 auto}
+.btn.small{font-size:18px;min-height:52px;padding:0 22px;flex:0 0 auto}
+.btn.danger{background:transparent;color:#B42318;border-color:#B42318}
+.link{appearance:none;border:0;background:none;color:var(--muted);font:inherit;font-weight:300;font-size:16px;text-decoration:underline;text-underline-offset:4px;cursor:pointer;padding:0;min-height:52px;display:inline-flex;align-items:center}
+
+/* Results */
+.results{display:grid;gap:12px;margin-top:26px}
+.result{appearance:none;width:100%;text-align:left;border:1.5px solid var(--card-border);background:var(--card-bg);border-radius:14px;padding:22px 24px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:16px;transition:all .15s;font-family:inherit;color:var(--fg)}
+.result:active{transform:scale(.99);background:var(--card-hover)}
+.result:disabled{opacity:.5}
+.result .name{display:block;font-family:var(--cond);font-weight:800;font-stretch:condensed;text-transform:uppercase;font-size:26px;color:var(--head);line-height:1}
+.result .co{display:block;font-family:var(--serif);font-style:italic;font-weight:300;font-size:19px;color:var(--muted);margin-top:6px}
+.result .arrow{font-weight:300;font-size:30px;color:var(--muted)}
+.empty{border:1.5px dashed var(--card-border);border-radius:14px;padding:22px 24px;color:var(--muted);font-weight:300}
+.empty strong{font-weight:700;color:var(--head)}
+
+/* RSVP context card */
+.ctx{display:flex;gap:18px 36px;flex-wrap:wrap;padding:18px 22px;border-radius:12px;background:var(--card-bg);border:1.5px solid var(--card-border);margin:0 0 26px}
+.ctx > div{display:flex;flex-direction:column;gap:3px}
+.ctx .k{font-weight:700;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ctx .v{font-weight:400;font-size:18px;color:var(--head)}
+.ctx .v.serif{font-family:var(--serif);font-style:italic;font-weight:300;font-size:20px}
+.ctx .sub{font-weight:300;color:var(--muted)}
+
+.rule{border:0;border-top:1px solid var(--rule);margin:30px 0}
+.section{font-family:var(--cond);font-weight:800;font-stretch:condensed;text-transform:uppercase;font-size:28px;color:var(--head);margin:0 0 16px;letter-spacing:0}
+
+/* Thank you */
+.thanks h1{font-size:clamp(60px,12vw,120px)}
+.check{width:88px;height:88px;border-radius:50%;background:var(--btn-bg);color:var(--btn-fg);display:grid;place-items:center;margin:0 0 26px;animation:pop .5s cubic-bezier(.2,1.4,.3,1) both}
+@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.check svg{width:44px;height:44px}
+
+/* Footer */
+.foot{flex:0 0 auto;padding:10px clamp(20px,5vw,56px) calc(10px + env(safe-area-inset-bottom,0px));font-family:var(--serif);font-style:italic;font-weight:300;font-size:14px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:12px}
+.foot .staff{appearance:none;border:0;background:none;font-family:var(--sans);font-style:normal;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);min-height:52px;min-width:72px;padding:0 4px;cursor:pointer;opacity:.7}
+
+/* Toast */
+.nudge{position:fixed;left:50%;bottom:calc(64px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--btn-bg);color:var(--btn-fg);padding:14px 22px;border-radius:12px;font-weight:400;font-size:16px;box-shadow:0 10px 30px rgba(2,30,66,.25);z-index:9;max-width:90vw;text-align:center;pointer-events:none;opacity:0;transition:opacity .4s}
+.nudge.show{opacity:1;transition:opacity .15s}
+
+/* Admin */
+.card{background:var(--card-bg);border:1.5px solid var(--card-border);border-radius:14px;padding:22px 24px;margin:0 0 18px}
+.card h2{font-family:var(--cond);font-weight:800;font-stretch:condensed;text-transform:uppercase;font-size:26px;color:var(--head);margin:0 0 12px;line-height:1}
+.card p{margin:0 0 10px}
+.muted{color:var(--muted);font-weight:300}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:8px 0 14px}
+.stat{border:1px solid var(--card-border);border-radius:10px;padding:12px 14px}
+.stat .n{font-family:var(--cond);font-weight:800;font-stretch:condensed;font-size:40px;line-height:1;color:var(--head)}
+.stat .t{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+table.list{width:100%;border-collapse:collapse;font-size:16px}
+table.list th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;padding:6px 8px;border-bottom:1px solid var(--rule)}
+table.list td{padding:8px;border-bottom:1px solid var(--rule);vertical-align:top}
+.ok{color:#05603A;font-weight:700}
+.warn{color:#B54708;font-weight:700}
+.bad{color:#B42318;font-weight:700}
+ul.msgs{margin:6px 0 12px;padding-left:20px}
+ul.msgs li{margin:4px 0}
+.inline{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.inline .field{flex:1 1 220px;margin-bottom:0}
+.toggle{display:flex;align-items:center;gap:12px;min-height:52px;cursor:pointer}
+.toggle input{width:28px;height:28px}
+.status-line{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:15px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <button class="logo" data-action="logo" aria-label="LR Paris — start over">
+    <svg viewBox="0 0 850.3936768 155.9055328" fill="currentColor" aria-hidden="true"><path d="M0,153.3838959V2.5216484h28.9957504v126.4891548h63.6646729v24.3730927H0Z"/><path d="M192.6703186,153.3838959l-27.5246277-60.5131378h-28.1565704v60.5131378h-28.9957581V2.5216484h51.4791565c39.921463,0,58.6214142,14.7081833,58.6214142,43.4936295,0,19.7504387-10.2958374,32.3576012-26.2648315,38.8709679l32.9885254,68.4976349h-32.1472778l-.0000305.0000153ZM159.6818085,69.3378601c10.9257202,0,29.2050323-2.1010284,29.2050323-21.4318695,0-18.6999207-15.1277771-21.0112534-27.733902-21.0112534h-24.1638031v42.4431229h22.692688-.0000153Z"/><path d="M301.31073,153.3838959V2.5216484h51.8977051c39.0823059,0,58.2028198,15.1277695,58.2028198,46.2245483,0,32.1483192-21.4308472,47.0657845-58.6213989,47.0657845h-22.4833984v57.5719147h-28.9957581.0000305ZM354.0496826,72.0698013c13.4473572,0,28.3658447-3.5721436,28.3658447-23.3236084,0-14.7081833-9.8752136-21.8514557-27.3153381-21.8514557h-24.7937012v45.1750641h23.7431946Z"/><path d="M506.1665649,153.3838959l-10.9257202-39.712204h-48.74823l-10.9257202,39.7121887h-29.2050171L451.7451782,2.5216331h39.2915649l45.5966797,150.8622475h-30.4668579v.0000153ZM453.2163086,89.5089035h35.3008423l-17.4401245-63.0347748h-.4205933l-17.4401245,63.0347748Z"/><path d="M641.7587891,153.3838959l-27.5245972-60.5131378h-28.1565552v60.5131378h-28.9957275V2.5216484h51.479126c39.9214478,0,58.6213989,14.7081833,58.6213989,43.4936295,0,19.7504387-10.2958374,32.3576012-26.2648315,38.8709679l32.9885254,68.4976349h-32.1472778l-.000061.0000153ZM608.7703247,69.3378601c10.9257202,0,29.2070923-2.1010284,29.2070923-21.4318695,0-18.6999207-15.1298218-21.0112534-27.7359619-21.0112534h-24.1638184v42.4431229h22.692688Z"/><path d="M691.758667,153.3838959V2.5216484h28.9957275v150.8622475h-28.9957275Z"/><path d="M822.2371216,43.4936409c-5.461853-13.867981-14.0772705-20.3813553-28.154541-20.3813553-13.0267334,0-22.692688,6.5133743-22.692688,18.0700226,0,30.6771889,79.0037842,13.4473648,79.0037842,68.9182625,0,30.0462646-22.692688,45.8049622-55.0513306,45.8049622-29.2050171,0-47.2750854-11.5566559-56.5203857-40.1317902l26.8947144-8.4051208c4.2020264,16.179306,13.4473877,25.0040131,31.3081055,25.0040131,15.1277466,0,26.0535278-6.9339905,26.0535278-20.171051,0-33.198822-79.633667-14.7081757-79.633667-70.8089752C743.4446411,16.1782837,764.4569092.0000038,793.6619263.0000038,820.9772949.0000038,838.2060547,10.9257278,846.6121826,34.6689301l-24.3751221,8.824707s.000061.0000076.000061.0000038Z"/></svg>
+  </button>
+  <span class="chip" id="viewChip" hidden>Staff</span>
+</header>
+
+<main class="stage" id="stage">
+
+  <!-- ================= GUEST VIEW ================= -->
+
+  <section class="screen" id="s-home">
+    <p class="eyebrow">Open House · October 6–8, 2026 · New York Showroom</p>
+    <h1>Welcome to<br>LR Paris</h1>
+    <p class="lede">Please sign in to the Open House. Have you RSVP'd for this event?</p>
+    <div class="choices">
+      <button class="choice primary" data-action="go-lookup">
+        <span class="big">Yes, I RSVP'd</span>
+        <span class="small">We'll find your details so you don't have to type them.</span>
+      </button>
+      <button class="choice" data-action="go-walkin">
+        <span class="big">No, I haven't</span>
+        <span class="small">Takes about a minute.</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="screen" id="s-lookup">
+    <p class="step">Step 1 of 3</p>
+    <h1>Find your RSVP</h1>
+    <p class="lede">Enter your name as you gave it when you RSVP'd.</p>
+    <div class="row">
+      <div class="field"><label for="lf">First name <span class="req">*</span></label><input id="lf" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words" enterkeyhint="next" placeholder="First name"></div>
+      <div class="field"><label for="ll">Last name <span class="req">*</span></label><input id="ll" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words" enterkeyhint="search" placeholder="Last name"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="findBtn" data-action="lookup">Find my RSVP</button>
+      <button class="btn ghost" data-action="home">Back</button>
+    </div>
+    <div class="results" id="results" aria-live="polite"></div>
+  </section>
+
+  <section class="screen" id="s-confirm">
+    <p class="step">Step 2 of 3</p>
+    <h1>Confirm your details</h1>
+    <div class="ctx" id="ctx"></div>
+    <div class="row">
+      <div class="field"><label for="cf">First name <span class="req">*</span></label><input id="cf" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words"></div>
+      <div class="field"><label for="cl">Last name <span class="req">*</span></label><input id="cl" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words"></div>
+    </div>
+    <div class="field"><label for="cc">Company <span class="req">*</span></label><input id="cc" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words"></div>
+
+    <hr class="rule">
+    <p class="section">Your group today</p>
+
+    <div class="field" id="chgField">
+      <label for="chg" id="chgLabel">Has your group size changed? <span class="req">*</span></label>
+      <div class="selectwrap">
+        <select id="chg" required>
+          <option value="" selected disabled>Select one</option>
+          <option value="same">No, it's the same</option>
+          <option value="changed">Yes, it changed</option>
+        </select>
+      </div>
+      <p class="hint" id="chgHint"></p>
+    </div>
+
+    <div class="field reveal" id="bringField" hidden>
+      <label id="bringLabel">How many people are you bringing today? <span class="req">*</span></label>
+      <div class="stepper" role="group" aria-labelledby="bringLabel">
+        <button type="button" data-action="bring-minus" aria-label="Remove a person">−</button>
+        <output id="bring">0</output>
+        <button type="button" data-action="bring-plus" aria-label="Add a person">+</button>
+      </div>
+      <p class="hint" id="bringHint">Not including yourself.</p>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="rsvpSubmit" data-action="submit-rsvp">Complete sign-in</button>
+      <button class="btn ghost" data-action="back-lookup">Back</button>
+    </div>
+  </section>
+
+  <section class="screen" id="s-walkin">
+    <p class="step">New guest</p>
+    <h1>Sign in as a new guest</h1>
+    <p class="lede">A few details so we know who's with us today.</p>
+    <div class="row">
+      <div class="field"><label for="wf">First name <span class="req">*</span></label><input id="wf" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words"></div>
+      <div class="field"><label for="wl">Last name <span class="req">*</span></label><input id="wl" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words"></div>
+    </div>
+    <div class="field"><label for="we">Email <span class="req">*</span></label><input id="we" type="email" inputmode="email" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off"></div>
+    <div class="row">
+      <div class="field"><label for="wc">Company name <span class="req">*</span></label><input id="wc" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words"></div>
+      <div class="field"><label for="wj">Job title</label><input id="wj" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words"></div>
+    </div>
+
+    <div class="field" id="wDaysField">
+      <span class="label" id="wDaysLabel">Day(s) of attendance <span class="req">*</span></span>
+      <div class="pills" id="wdays" role="group" aria-labelledby="wDaysLabel"></div>
+    </div>
+
+    <div class="field" id="wSlotField">
+      <span class="label" id="wSlotLabel">Time of attendance <span class="req">*</span></span>
+      <div class="pills" id="slots" role="radiogroup" aria-labelledby="wSlotLabel"></div>
+    </div>
+
+    <div class="field">
+      <span class="label" id="wgLabel">How many people are in your group? <span class="req">*</span></span>
+      <div class="stepper" role="group" aria-labelledby="wgLabel">
+        <button type="button" data-action="wg-minus" aria-label="Remove a person">−</button>
+        <output id="wg">1</output>
+        <button type="button" data-action="wg-plus" aria-label="Add a person">+</button>
+      </div>
+      <p class="hint">Including yourself.</p>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="walkinSubmit" data-action="submit-walkin">Complete sign-in</button>
+      <button class="btn ghost" data-action="home">Back</button>
+    </div>
+  </section>
+
+  <section class="screen thanks" id="s-thanks">
+    <div class="check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 7"/></svg></div>
+    <p class="step" id="thanksStep">Step 3 of 3</p>
+    <h1>Thank you</h1>
+    <p class="lede" id="thanksMsg">You're signed in. Enjoy the showroom.</p>
+    <div class="actions">
+      <button class="btn" data-action="home">Finish</button>
+    </div>
+  </section>
+
+  <section class="screen" id="s-staffmsg">
+    <h1>Please ask a member of staff</h1>
+    <p class="lede" id="staffMsg">This iPad isn't ready yet.</p>
+  </section>
+
+  <!-- ================= ADMIN VIEW ================= -->
+
+  <section class="screen" id="s-setup">
+    <p class="step">First-time setup</p>
+    <h1>Set up this iPad</h1>
+    <p class="lede">Name this iPad and choose the staff password. Use the same password on both iPads and keep it in the password manager.</p>
+    <div class="field"><label for="setupDevice">iPad name <span class="req">*</span></label><input id="setupDevice" type="text" placeholder="iPad A or iPad B" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off"></div>
+    <div class="row">
+      <div class="field"><label for="setupPw1">Staff password <span class="req">*</span></label><input id="setupPw1" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="setupPw2">Repeat password <span class="req">*</span></label><input id="setupPw2" type="password" autocomplete="new-password"></div>
+    </div>
+    <p class="hint">At least 6 characters.</p>
+    <div class="actions"><button class="btn" data-action="setup-save">Save and continue</button></div>
+  </section>
+
+  <section class="screen" id="s-pw">
+    <p class="step">Staff only</p>
+    <h1>Staff sign-in</h1>
+    <p class="lede">Enter the staff password to open the admin view.</p>
+    <div class="field"><label for="pwInput">Password</label><input id="pwInput" type="password" autocomplete="off" enterkeyhint="go"></div>
+    <div class="actions">
+      <button class="btn" id="pwBtn" data-action="pw-submit">Open admin view</button>
+      <button class="btn ghost" data-action="home">Cancel</button>
+    </div>
+  </section>
+
+  <section class="screen" id="s-admin">
+    <div class="actions" style="margin:0 0 18px"><button class="btn small ghost" data-action="exit-admin">Back to guest view</button></div>
+
+    <div class="card">
+      <h2>This iPad</h2>
+      <div class="status-line" id="admStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>RSVP list</h2>
+      <p id="admRsvpInfo" class="muted"></p>
+      <div class="actions" style="margin-top:12px">
+        <label class="btn small" for="importFile">Import RSVP list (CSV)</label>
+        <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+      </div>
+      <div id="admPreview" hidden></div>
+    </div>
+
+    <div class="card">
+      <h2>Check-ins on this iPad</h2>
+      <p class="muted" id="admTodayLabel"></p>
+      <div class="stats" id="admStats"></div>
+      <div id="admDays"></div>
+    </div>
+
+    <div class="card">
+      <h2>Export check-ins</h2>
+      <p id="admExportInfo"></p>
+      <p class="muted">Shares every check-in on this iPad as one CSV. Choose “Save to Files” › the OneDrive check-ins folder, or AirDrop it to the laptop (AirDrop works without wifi). Do it at about 13:00 and at close, then check the file arrived.</p>
+      <div class="actions" style="margin-top:12px"><button class="btn small" data-action="export">Export check-ins</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Recent check-ins today</h2>
+      <div id="admRecent"></div>
+    </div>
+
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="inline">
+        <div class="field"><label for="admDevice">iPad name</label><input id="admDevice" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="off"></div>
+        <button class="btn small" data-action="save-device">Save name</button>
+      </div>
+      <hr class="rule">
+      <label class="toggle"><input type="checkbox" id="admWalkinOnly"> <span>Walk-in-only mode (fallback): both home buttons open the new-guest form; day and time questions are hidden.</span></label>
+      <hr class="rule">
+      <div class="inline">
+        <div class="field"><label for="admPw1">New staff password</label><input id="admPw1" type="password" autocomplete="new-password"></div>
+        <div class="field"><label for="admPw2">Repeat</label><input id="admPw2" type="password" autocomplete="new-password"></div>
+        <button class="btn small" data-action="change-pw">Change password</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Maintenance</h2>
+      <p class="muted">“Clear test check-ins” deletes only check-ins dated outside Oct 6–8 (tests and the dry run); event-day check-ins and the RSVP list are kept. “Clear everything” is for after the event: it only works once every check-in has been shared. Afterwards, also delete the RSVP and check-in CSV files from Files.</p>
+      <div class="inline">
+        <div class="field"><label for="admClearCheckins">Type CLEAR to confirm</label><input id="admClearCheckins" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="characters"></div>
+        <button class="btn small danger" data-action="clear-checkins">Clear test check-ins</button>
+      </div>
+      <hr class="rule">
+      <div class="inline">
+        <div class="field"><label for="admClearAll">Type DELETE to confirm</label><input id="admClearAll" type="text" autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="characters"></div>
+        <button class="btn small danger" data-action="clear-all">Clear everything</button>
+      </div>
+      <hr class="rule">
+      <div class="actions" style="margin-top:0"><button class="btn small ghost" data-action="reload">Reload app</button></div>
+    </div>
+
+    <div class="actions"><button class="btn small ghost" data-action="exit-admin">Back to guest view</button></div>
+  </section>
+
+</main>
+
+<footer class="foot" id="foot">
+  <span>LR Paris · 1412 Broadway, New York</span>
+  <button class="staff" id="staffBtn" data-action="open-admin">Staff</button>
+</footer>
+
+<div class="nudge" id="nudge" role="status" aria-live="polite"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

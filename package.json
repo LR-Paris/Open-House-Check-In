@@ -1,0 +1,12 @@
+{
+  "name": "openhouse-kiosk",
+  "private": true,
+  "type": "module",
+  "description": "LR Paris Open House offline iPad check-in (static site, no dependencies)",
+  "scripts": {
+    "test": "node --test && python3 -m unittest discover -s tools -p 'test_*.py'",
+    "serve": "python3 -m http.server 8765",
+    "stamp": "node tools/stamp-build.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

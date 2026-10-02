@@ -1,0 +1,12 @@
+# Never commit guest data or exports
+*.csv
+!test/fixtures/*.csv
+exports/
+attendance_master.csv
+hubspot_import.csv
+
+# Local tooling
+.claude/
+.DS_Store
+__pycache__/
+node_modules/
