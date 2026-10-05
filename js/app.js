@@ -6,7 +6,7 @@ const $ = sel => document.querySelector(sel);
 const $$ = sel => [...document.querySelectorAll(sel)];
 
 const GUEST_INPUTS = ['#lf', '#ll', '#cf', '#cl', '#cc', '#wf', '#wl', '#we', '#wc', '#wj', '#wr'];
-const ADMIN_INPUTS = ['#pwInput', '#setupPw1', '#setupPw2', '#admPw1', '#admPw2', '#admClearCheckins', '#admClearAll'];
+const ADMIN_INPUTS = ['#pwInput', '#setupPw1', '#setupPw2', '#admPw1', '#admPw2', '#admClearCheckins', '#admClearAll', '#dataSearch'];
 const OFFLINE_URLS = ['./', './index.html', './js/app.js', './js/core.js', './js/db.js'];
 const SUBMIT_LABEL = 'Complete sign-in';
 const DEFAULT_SETTINGS = { device: '', pw: null, walkinOnly: false, lastExportAtUtc: null, lastExportAtLocal: null, lastExportCount: 0 };
@@ -33,6 +33,7 @@ const S = {
   pwFails: 0,
   pwLockedUntil: 0,
   pendingImport: null,
+  dataView: null,   // the RSVP / check-in table on the data screen: { kind, columns, rows, sortCol, sortDir }
   modal: false,     // share sheet / Files picker open: the page gets no touches, so don't idle-reset under it
   // environment
   storageFailed: false,
@@ -80,9 +81,10 @@ function show(id) {
   S.screen = id;
   S.lastActivity = Date.now();
   const chip = $('#viewChip');
-  chip.hidden = id !== 'admin';
+  chip.hidden = id !== 'admin' && id !== 'data';
   chip.textContent = 'Staff · ' + (S.settings.device || 'iPad');
   $('#stage').classList.toggle('wide', id === 'admin');
+  $('#stage').classList.toggle('full', id === 'data');
   $('#staffBtn').hidden = !(id === 'home' || id === 'staffmsg');
   window.scrollTo(0, 0);
 }
@@ -115,6 +117,7 @@ function resetGuest() {
 
 function resetAdmin() {
   ADMIN_INPUTS.forEach(s => { $(s).value = ''; });
+  closeData();
   S.pendingImport = null;
   $('#admPreview').hidden = true;
   $('#admPreview').replaceChildren();
@@ -510,11 +513,71 @@ async function renderAdmin() {
           el('td', { text: `${c.first} ${c.last}` }),
           el('td', { text: c.company ?? '' }),
           el('td', { text: String(c.groupToday) }),
-          el('td', { text: c.path === 'lookup' ? 'RSVP' : c.rsvpKey ? 'New-guest form (matched RSVP)' : 'Walk-in' })))))
+          el('td', { text: core.checkinHow(c) })))))
     : el('p', { class: 'muted', text: 'No check-ins today on this iPad yet.' }));
 
   $('#admDevice').value = S.settings.device;
   $('#admWalkinOnly').checked = !!S.settings.walkinOnly;
+}
+
+// ---------------------------------------------------------------- admin: data tables
+
+function openData(kind) {
+  if (S.screen !== 'admin') return;
+  const t = kind === 'rsvps' ? core.rsvpTable(S.rsvps, S.checkins) : core.checkinTable(S.checkins);
+  S.dataView = { kind, ...t, sortCol: null, sortDir: 'asc' };
+  $('#dataSearch').value = '';
+  $('#dataTitle').textContent = kind === 'rsvps' ? 'RSVP list' : 'Check-ins on this iPad';
+  $('#dataNote').textContent = kind === 'rsvps'
+    ? (S.rsvpMeta
+      ? `As imported from “${S.rsvpMeta.fileName}” on ${S.rsvpMeta.importedAtLocal}. “Signed in” shows the days each person checked in on this iPad.`
+      : 'No RSVP list imported yet.')
+    : 'Every check-in stored on this iPad, newest first, including test days. The other iPad’s check-ins are not here.';
+  renderData();
+  show('data');
+  fitDataTable();
+}
+
+function renderData() {
+  const v = S.dataView;
+  if (!v) return;
+  let rows = core.filterRows(v.rows, $('#dataSearch').value);
+  if (v.sortCol != null) rows = core.sortRows(rows, v.sortCol, v.sortDir);
+  const noun = n => `${n} ${v.kind === 'rsvps' ? 'RSVP' : 'check-in'}${n === 1 ? '' : 's'}`;
+  $('#dataCount').textContent = rows.length === v.rows.length ? noun(v.rows.length) : `${rows.length} of ${noun(v.rows.length)}`;
+  const head = el('tr', {}, ...v.columns.map((c, i) => el('th', {},
+    el('button', {
+      type: 'button', class: v.sortCol === i ? 'sort on' : 'sort', dataset: { action: 'data-sort', col: String(i) },
+      text: c + (v.sortCol === i ? (v.sortDir === 'asc' ? ' ▲' : ' ▼') : ''),
+    }))));
+  const body = rows.length
+    ? rows.map(r => el('tr', {}, ...r.map(c => el('td', { text: c }))))
+    : [el('tr', {}, el('td', { colspan: String(v.columns.length), class: 'muted', text: v.rows.length ? 'No rows match the search.' : 'Nothing here yet.' }))];
+  $('#dataTable').replaceChildren(el('table', { class: 'list data' }, el('thead', {}, head), el('tbody', {}, ...body)));
+  $('#dataTable').scrollTop = 0; // a new sort or search starts at its first row (sideways position kept)
+}
+
+/** Let the table's own scroll area end just above the bottom of the screen, so its last rows can be reached. */
+function fitDataTable() {
+  if (S.screen !== 'data') return;
+  const wrap = $('#dataTable');
+  const top = wrap.getBoundingClientRect().top + window.scrollY;
+  wrap.style.maxHeight = `${Math.max(240, document.documentElement.clientHeight - top - 32)}px`;
+}
+
+function sortData(btn) {
+  const v = S.dataView;
+  if (!v) return;
+  const col = Number(btn.dataset.col);
+  if (v.sortCol === col) v.sortDir = v.sortDir === 'asc' ? 'desc' : 'asc';
+  else { v.sortCol = col; v.sortDir = 'asc'; }
+  renderData();
+}
+
+/** Guest data never lingers in the page once staff leave the table. */
+function closeData() {
+  S.dataView = null;
+  $('#dataTable').replaceChildren();
 }
 
 // ---------------------------------------------------------------- admin: import
@@ -739,6 +802,10 @@ const ACTIONS = {
   'pw-submit': submitPw,
   'setup-save': setupSave,
   'exit-admin': goHome,
+  'view-rsvps': () => openData('rsvps'),
+  'view-checkins': () => openData('checkins'),
+  'data-sort': sortData,
+  'data-back': () => { closeData(); $('#dataSearch').value = ''; renderAdmin(); show('admin'); },
   'import-confirm': confirmImport,
   'import-cancel': () => { S.pendingImport = null; $('#admPreview').hidden = true; $('#admPreview').replaceChildren(); },
   'export': exportCheckins,
@@ -772,6 +839,9 @@ function wire() {
   onEnter('#lf', () => $('#ll').focus());
   onEnter('#ll', doLookup);
   onEnter('#pwInput', submitPw);
+  onEnter('#dataSearch', blur);
+  $('#dataSearch').addEventListener('input', renderData);
+  window.addEventListener('resize', fitDataTable);
 
   for (const ev of ['pointerdown', 'keydown', 'input', 'change']) {
     document.addEventListener(ev, () => {

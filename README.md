@@ -3,7 +3,7 @@
 An offline iPad app for guest sign-in at the Open House (1412 Broadway, Oct 6–8 2026).
 
 - **Guest view:** the five approved screens. Guests can find their RSVP by name, or sign in as a new guest.
-- **Admin view:** behind a password. Import the HubSpot RSVP list, export check-ins, change settings, clear data.
+- **Admin view:** behind a password. Import the HubSpot RSVP list, view it and every check-in as searchable, sortable tables, export check-ins, change settings, clear data.
 - **Storage:** everything stays **on each iPad** (IndexedDB). The two iPads never talk to each other, and the app makes no network calls once installed.
 - **Merging:** `tools/merge_checkins.py` combines both iPads' exports on a laptop.
 
@@ -84,6 +84,7 @@ After any code change, run `npm run stamp` before committing (see §9), so the i
 1. AirDrop the CSV to the iPad and save it to **Files › On My iPad**. If the iPad doesn't show up in AirDrop: check wifi and Bluetooth are on and Airplane mode is off, then set **Control Center › AirDrop › Everyone for 10 Minutes**.
 2. In the admin view, tap **Import RSVP list (CSV)** and pick the file. If a menu appears first, tap **Choose File**.
 3. Check the preview. On 1 Oct the figures were 87 RSVPs; 86 going, 1 declined; Oct 6 / 7 / 8 = 28 / 28 / 27; 4 going with no day. Then tap **Import**.
+4. Optional: tap **View RSVP list** to see every imported row as a table (search by any name, company, email or rep; tap a heading to sort). **View all check-ins** in the check-ins card does the same for this iPad's check-ins. Both close after 2 minutes untouched, like the rest of the admin view.
 
 **Lock it**
 1. Tap **Back to guest view**.

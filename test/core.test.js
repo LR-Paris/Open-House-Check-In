@@ -252,6 +252,56 @@ test('sales rep: the new-guest answer, else the rep on the RSVP', () => {
   assert.ok(core.EVENT.reps.includes('None. Please assign me one'));
 });
 
+test('admin RSVP table: every imported row, by surname, with sign-ins', () => {
+  const { rows: all } = core.parseRsvpCsv(sample);
+  const checkin = core.buildCheckin({ path: 'lookup', rsvp: sarah, first: 'Sarah', last: 'Kim', company: 'MC', groupAnswer: 'same', bring: 1 }, 'iPad A', NOW);
+  const t = core.rsvpTable(all, [checkin]);
+  assert.equal(t.columns.length, 12);
+  assert.equal(t.rows.length, all.length);
+  assert.ok(t.rows.every(r => r.length === t.columns.length && r.every(c => typeof c === 'string')));
+  const lasts = t.rows.map(r => r[2]);
+  assert.deepEqual(lasts, [...lasts].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })));
+  const kim = t.rows.find(r => r[0] === '1001');
+  assert.deepEqual(kim.slice(1, 4), ['Sarah', 'Kim', 'sarah.kim@example.com']);
+  assert.equal(kim[7], 'Oct 7');
+  assert.equal(kim[8], '10:00am – 11:00am');
+  assert.equal(kim[10], 'Piper Bucholz');
+  assert.equal(kim[11], 'Oct 7'); // signed in
+  assert.equal(t.rows.find(r => r[0] === '1007')[1], 'Hélène');
+  assert.equal(t.rows.find(r => r[0] === '1002')[11], '');
+});
+
+test('admin check-in table: newest first, how they signed in', () => {
+  const a = core.buildCheckin({ path: 'lookup', rsvp: sarah, first: 'Sarah', last: 'Kim', company: 'MC', groupAnswer: 'same', bring: 1 }, 'iPad A', NOW);
+  const b = core.buildCheckin({ path: 'walk_in', rsvp: null, first: 'Neo', last: 'Guest', company: 'N', email: 'n@x.com', jobTitle: 'Buyer', salesRep: 'Kia Glover', walkinGroup: 3, walkinDays: ['2026-10-07'], walkinSlot: '9:00am - 10:00am' }, 'iPad A', new Date('2026-10-07T15:00:00Z'));
+  const t = core.checkinTable([a, b]);
+  assert.equal(t.rows.length, 2);
+  assert.ok(t.rows.every(r => r.length === t.columns.length));
+  assert.equal(t.rows[0][1], 'Neo'); // newest first
+  assert.equal(t.rows[0][6], 'Kia Glover');
+  assert.equal(t.rows[0][7], '3');
+  assert.equal(t.rows[0][9], 'Walk-in');
+  assert.equal(t.rows[0][10], 'Oct 7');
+  assert.equal(t.rows[0][11], '9:00am – 10:00am');
+  assert.equal(t.rows[1][9], 'RSVP');
+  assert.equal(t.rows[1][12], '1001');
+  assert.equal(t.rows[1][6], 'Piper Bucholz'); // rep from the RSVP
+});
+
+test('admin tables: sort and search', () => {
+  const rows = [['10', 'Émile', ''], ['9', 'adam', 'x'], ['', 'Zoë', 'y']];
+  assert.deepEqual(core.sortRows(rows, 0).map(r => r[0]), ['9', '10', '']);          // numeric, blanks last
+  assert.deepEqual(core.sortRows(rows, 0, 'desc').map(r => r[0]), ['10', '9', '']);  // blanks last both ways
+  assert.deepEqual(core.sortRows(rows, 1).map(r => r[1]), ['adam', 'Émile', 'Zoë']); // case and accents ignored
+  const slots = core.EVENT.slots.map(sl => [core.formatSlot(sl)]).reverse();
+  assert.deepEqual(core.sortRows(slots, 0).map(r => r[0]), core.EVENT.slots.map(core.formatSlot)); // 9am … 6pm, not 1pm first
+  assert.equal(core.sortRows(slots, 0, 'desc')[0][0], '6:00pm – 6:30pm');
+  assert.deepEqual(core.filterRows(rows, 'emile').map(r => r[1]), ['Émile']);
+  assert.deepEqual(core.filterRows(rows, '  ').length, 3);
+  assert.deepEqual(core.filterRows([['Sarah', 'sarah.kim@example.com', 'Maison Clair']], 'kim@example maison').length, 1);
+  assert.deepEqual(core.filterRows([['Sarah', 'Kim']], 'sarah park').length, 0); // every word must match
+});
+
 test('walk-in check-in: not on the list', () => {
   const c = core.buildCheckin({ path: 'walk_in', rsvp: null, first: 'Taylor', last: 'Morgan', company: 'T', email: 't@x.com', walkinGroup: 1, walkinDays: ['2026-10-07'], walkinSlot: '9:00am - 10:00am' }, 'iPad A', NOW);
   assert.equal(c.rsvpKey, null);

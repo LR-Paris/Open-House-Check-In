@@ -1,7 +1,7 @@
 // Open House kiosk — pure logic. No DOM, no storage.
 // Imported by js/app.js in the browser and by test/core.test.js in Node.
 
-export const VERSION = '1.1.0'; // human label shown in the admin view; the service worker's BUILD hash is what forces updates
+export const VERSION = '1.2.0'; // human label shown in the admin view; the service worker's BUILD hash is what forces updates
 
 export const EVENT = {
   tz: 'America/New_York',
@@ -31,7 +31,7 @@ export const EVENT = {
 export const LOOKUP = { firstMin: 0.3, lastMin: 0.5, maxResults: 5 };
 export const STEPPER_MAX = 20;
 export const PARTY_MAX = 50;
-export const IDLE_MS = { lookup: 60_000, confirm: 60_000, walkin: 120_000, thanks: 20_000, admin: 120_000, pw: 60_000 };
+export const IDLE_MS = { lookup: 60_000, confirm: 60_000, walkin: 120_000, thanks: 20_000, admin: 120_000, data: 120_000, pw: 60_000 };
 
 // ---------- text helpers ----------
 
@@ -396,6 +396,72 @@ export function matchWalkinToRsvp(rsvps, email, last) {
 
 export const labelForDate = d => LABEL_BY_DATE.get(d) ?? d;
 export const formatSlot = s => (s ? String(s).replace(' - ', ' – ') : '');
+export const checkinHow = c => (c.path === 'lookup' ? 'RSVP' : c.rsvpKey ? 'New-guest form (matched RSVP)' : 'Walk-in');
+
+// ---------- admin data tables (rows are arrays of strings) ----------
+
+const cellText = v => (v == null ? '' : String(v));
+
+export const RSVP_TABLE_COLUMNS = ['Record ID', 'First name', 'Last name', 'Email', 'Company', 'Job title', 'RSVP',
+  'Day(s)', 'Time', 'Group', 'Sales rep', 'Signed in'];
+
+/** The imported RSVP list, sorted by last then first name, with the days each person signed in on this iPad. */
+export function rsvpTable(rsvps, checkins = []) {
+  const signedIn = new Map();
+  for (const c of checkins) {
+    if (!c.rsvpKey) continue;
+    if (!signedIn.has(c.rsvpKey)) signedIn.set(c.rsvpKey, new Set());
+    signedIn.get(c.rsvpKey).add(c.eventDate);
+  }
+  const rows = rsvps.map(r => [
+    r.recordId, r.first, r.last, r.email, r.company, r.jobTitle, r.status,
+    formatDays(r.days), formatSlot(r.slot), r.partySize, r.rep,
+    [...(signedIn.get(r.key) ?? [])].sort().map(labelForDate).join(', '),
+  ].map(cellText));
+  return { columns: RSVP_TABLE_COLUMNS, rows: sortRows(sortRows(rows, 1), 2) };
+}
+
+export const CHECKIN_TABLE_COLUMNS = ['Checked in', 'First name', 'Last name', 'Company', 'Email', 'Job title',
+  'Sales rep', 'Group', 'Group on RSVP', 'How', 'Day(s) planned', 'Time planned', 'Record ID'];
+
+/** Every check-in, newest first. "Planned" is what a new guest picked, or what the RSVP said. */
+export function checkinTable(checkins) {
+  const rows = [...checkins].sort((a, b) => b.atUtc.localeCompare(a.atUtc)).map(c => {
+    const walkin = c.path === 'walk_in';
+    return [
+      c.atLocal, c.first, c.last, c.company, c.email, c.jobTitle, c.salesRep, c.groupToday, c.partySizeOnRsvp,
+      checkinHow(c), formatDays(walkin ? c.walkinDays : c.rsvpDays), formatSlot(walkin ? c.walkinSlot : c.rsvpSlot), c.recordId,
+    ].map(cellText);
+  });
+  return { columns: CHECKIN_TABLE_COLUMNS, rows };
+}
+
+const NUMERIC = /^-?\d+(\.\d+)?$/;
+const SLOT_RANK = new Map(EVENT.slots.map((s, i) => [formatSlot(s), i])); // "1:00pm – 2:00pm" sorts after "9:00am – 10:00am"
+
+/** Stable sort on one column: time slots in day order, numbers numerically, text alphabetically (case and accents ignored). Blanks always last. */
+export function sortRows(rows, col, dir = 'asc') {
+  const sign = dir === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const x = a[col] ?? '', y = b[col] ?? '';
+    if (!x || !y) return (!x) - (!y);
+    let d;
+    if (SLOT_RANK.has(x) && SLOT_RANK.has(y)) d = SLOT_RANK.get(x) - SLOT_RANK.get(y);
+    else if (NUMERIC.test(x) && NUMERIC.test(y)) d = Number(x) - Number(y);
+    else d = x.localeCompare(y, 'en', { sensitivity: 'base', numeric: true });
+    return sign * d;
+  });
+}
+
+/** Rows containing every word of the query somewhere (case, accents and punctuation ignored). */
+export function filterRows(rows, query) {
+  const words = normalizeName(query).split(' ').filter(Boolean);
+  if (!words.length) return rows;
+  return rows.filter(r => {
+    const hay = normalizeName(r.join(' '));
+    return words.every(w => hay.includes(w));
+  });
+}
 
 export function formatDays(dates) {
   const labels = (dates ?? []).map(labelForDate);
