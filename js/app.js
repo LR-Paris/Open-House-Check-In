@@ -5,7 +5,7 @@ import * as db from './db.js';
 const $ = sel => document.querySelector(sel);
 const $$ = sel => [...document.querySelectorAll(sel)];
 
-const GUEST_INPUTS = ['#lf', '#ll', '#cf', '#cl', '#cc', '#wf', '#wl', '#we', '#wc', '#wj'];
+const GUEST_INPUTS = ['#lf', '#ll', '#cf', '#cl', '#cc', '#wf', '#wl', '#we', '#wc', '#wj', '#wr'];
 const ADMIN_INPUTS = ['#pwInput', '#setupPw1', '#setupPw2', '#admPw1', '#admPw2', '#admClearCheckins', '#admClearAll'];
 const OFFLINE_URLS = ['./', './index.html', './js/app.js', './js/core.js', './js/db.js'];
 const SUBMIT_LABEL = 'Complete sign-in';
@@ -298,17 +298,17 @@ function goWalkin(carry) {
 async function submitWalkin() {
   if (S.busy) return;
   const first = $('#wf').value.trim(), last = $('#wl').value.trim(), email = $('#we').value.trim();
-  const company = $('#wc').value.trim(), jobTitle = $('#wj').value.trim();
+  const company = $('#wc').value.trim(), jobTitle = $('#wj').value.trim(), salesRep = $('#wr').value;
   const walkinOnly = S.settings.walkinOnly;
   const days = $$('#wdays input:checked').map(i => i.value);
   const slot = $('#slots input:checked')?.value ?? null;
-  if (!first || !last || !email || !company) return nudge('Please complete the required fields.');
+  if (!first || !last || !email || !company || !jobTitle) return nudge('Please complete the required fields.');
   if (!core.validEmail(email)) return nudge('Please enter a valid email address.');
   if (!walkinOnly && !days.length) return nudge('Please pick at least one day.');
   if (!walkinOnly && !slot) return nudge('Please pick a time of attendance.');
   const match = core.matchWalkinToRsvp(S.rsvps, email, last); // same email AND surname → their RSVP
   const rec = core.buildCheckin({
-    path: 'walk_in', rsvp: match, first, last, company, email, jobTitle: jobTitle || null,
+    path: 'walk_in', rsvp: match, first, last, company, email, jobTitle, salesRep: salesRep || null,
     walkinGroup: S.wgroup,
     walkinDays: walkinOnly ? [today()] : days,
     walkinSlot: walkinOnly ? null : slot,
@@ -350,10 +350,13 @@ async function save(rec, firstName, btn) {
     return showThanks(firstName, outcome, rec.path);
   }
   S.saveFailures++;
-  if (S.saveFailures >= 3) {
+  if (S.saveFailures >= 2) {
+    // iPadOS before 26.5 can leave IndexedDB broken until the page reloads (WebKit bug 309386).
+    // Every committed check-in is already on disk, so restarting the app is safe.
     resetGuest();
-    setStaffMsg("This sign-in couldn't be saved.");
+    setStaffMsg("This sign-in couldn't be saved. Restarting…");
     show('staffmsg');
+    setTimeout(() => location.reload(), 3000);
   } else {
     nudge("This sign-in couldn't be saved. Please try again.", 4000);
   }
@@ -792,6 +795,7 @@ function buildStaticUi() {
     el('label', { class: 'pill' }, el('input', { type: 'checkbox', name: 'wd', value: d.date }), el('span', { text: d.label }))));
   $('#slots').replaceChildren(...core.EVENT.slots.map(s =>
     el('label', { class: 'pill' }, el('input', { type: 'radio', name: 'ws', value: s }), el('span', { text: core.formatSlot(s) }))));
+  $('#wr').append(...core.EVENT.reps.map(r => el('option', { value: r, text: r })));
 }
 
 function registerServiceWorker() {

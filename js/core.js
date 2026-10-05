@@ -1,7 +1,7 @@
 // Open House kiosk — pure logic. No DOM, no storage.
 // Imported by js/app.js in the browser and by test/core.test.js in Node.
 
-export const VERSION = '1.0.0'; // human label shown in the admin view; the service worker's BUILD hash is what forces updates
+export const VERSION = '1.1.0'; // human label shown in the admin view; the service worker's BUILD hash is what forces updates
 
 export const EVENT = {
   tz: 'America/New_York',
@@ -17,6 +17,14 @@ export const EVENT = {
     '9:00am - 10:00am', '10:00am - 11:00am', '11:00am - 12:00pm', '12:00pm - 1:00pm',
     '1:00pm - 2:00pm', '2:00pm - 3:00pm', '3:00pm - 4:00pm', '4:00pm - 5:00pm',
     '5:00pm - 6:00pm', '6:00pm - 6:30pm',
+  ],
+  // HubSpot "Your Sales Rep" (nyc_oh_2026_10_invited_by) option labels, in HubSpot's order, as on the RSVP form.
+  // Offered on the new-guest form. If the HubSpot options change, update this list.
+  reps: [
+    'Charles Dolige', 'Sarah Amar', 'Alexandra Byrne', 'Nancy Danino Savitt', 'Samantha Sacks', 'Kia Glover',
+    'Rachael Loiseau', 'Piper Bucholz', 'Sofia Catarino', 'Katy Lerner', 'Shannon Manganelli', 'Ciara Daly',
+    'Gilles Rousseau', 'Susan Goldman', 'Diane Fernandez', 'Tim Rand', 'DWS - Antonella', 'DWS - Audrey',
+    'None. Please assign me one',
   ],
 };
 
@@ -434,7 +442,7 @@ export function uuid() {
 
 /**
  * Build a check-in record.
- * input = { path: 'lookup'|'walk_in', rsvp, first, last, company, email, jobTitle,
+ * input = { path: 'lookup'|'walk_in', rsvp, first, last, company, email, jobTitle, salesRep,
  *           groupAnswer: 'same'|'changed'|null, bring, walkinGroup, walkinDays, walkinSlot }
  */
 export function buildCheckin(input, device, now = new Date()) {
@@ -466,6 +474,7 @@ export function buildCheckin(input, device, now = new Date()) {
     company: input.company || null,
     email: path === 'walk_in' ? input.email : (rsvp?.email ?? null),
     jobTitle: input.jobTitle || (path === 'lookup' ? rsvp?.jobTitle ?? null : null),
+    salesRep: input.salesRep || rsvp?.rep || null, // the new-guest answer, else the rep on their RSVP
     rsvpStatus: rsvp?.status ?? null,
     rsvpDays: rsvp?.days ?? [],
     rsvpSlot: rsvp?.slot ?? null,
@@ -547,6 +556,7 @@ export const EXPORT_COLUMNS = [
   ['company', c => c.company],
   ['email', c => c.email],
   ['job_title', c => c.jobTitle],
+  ['sales_rep', c => c.salesRep],
   ['rsvp_status', c => c.rsvpStatus],
   ['rsvp_days', c => daysCell(c.rsvpDays)],
   ['rsvp_slot', c => c.rsvpSlot],

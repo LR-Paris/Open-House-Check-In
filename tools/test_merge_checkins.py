@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import merge_checkins as m  # noqa: E402
 
 HEADER = ["checkin_id", "device", "event_date", "checked_in_at_local", "checked_in_at_utc", "path", "record_id",
-          "email_matched", "first_name", "last_name", "company", "email", "job_title", "rsvp_status", "rsvp_days",
+          "email_matched", "first_name", "last_name", "company", "email", "job_title", "sales_rep", "rsvp_status", "rsvp_days",
           "rsvp_slot", "party_size_on_rsvp", "walkin_days", "walkin_slot", "group_answer", "group_size_today",
           "group_changed", "group_updated_at_local"]
 
@@ -22,10 +22,10 @@ def row(cid, device, day, utc, path="lookup", rec="", email="", first="A", last=
     return r
 
 
-def write(dirpath, name, rows):
+def write(dirpath, name, rows, header=HEADER):
     path = os.path.join(dirpath, name)
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=HEADER, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
+        w = csv.DictWriter(f, fieldnames=header, quoting=csv.QUOTE_ALL, lineterminator="\r\n", extrasaction="ignore")
         w.writeheader()
         for r in rows:
             w.writerow({k: ("'" + v if v and v[0] in "=+-@" else v) for k, v in r.items()})
@@ -128,6 +128,30 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(rows["s@x.com"]["First Name"], "")      # existing contact: names left blank
         self.assertEqual(rows["new@x.com"]["First Name"], "Neo")  # new contact: names filled
         self.assertEqual(rows["new@x.com"]["Company Name"], "+Plus")  # no Excel guard in the HubSpot file
+
+    def test_sales_rep_carried_through_and_old_exports_still_merge(self):
+        write(self.d, "checkins_iPadA_x.csv", [
+            dict(row("a1", "iPad A", "2026-10-06", "2026-10-06T14:00:00Z", path="walk_in", email="new@x.com", first="Neo", last="Guest"),
+                 sales_rep="Piper Bucholz"),
+            dict(row("a2", "iPad A", "2026-10-06", "2026-10-06T15:00:00Z", rec="1001", email="s@x.com", last="Kim"),
+                 sales_rep="Kia Glover"),
+        ])
+        # a v1.0 export (no sales_rep column) from the other iPad
+        old_header = [h for h in HEADER if h != "sales_rep"]
+        write(self.d, "checkins_iPadB_x.csv", [
+            row("b1", "iPad B", "2026-10-06", "2026-10-06T16:00:00Z", path="walk_in", email="old@x.com", first="Old", last="Export"),
+        ], header=old_header)
+        out = os.path.join(self.d, "out")
+        self.assertEqual(m.main([self.d, "-o", out]), 0)
+        with open(os.path.join(out, "attendance_master.csv"), encoding="utf-8-sig", newline="") as f:
+            master = {r["email"]: r for r in csv.DictReader(f)}
+        self.assertEqual(master["new@x.com"]["sales_rep"], "Piper Bucholz")
+        self.assertEqual(master["s@x.com"]["sales_rep"], "Kia Glover")
+        self.assertEqual(master["old@x.com"]["sales_rep"], "")
+        with open(os.path.join(out, "hubspot_import.csv"), encoding="utf-8-sig", newline="") as f:
+            hs = {r["Email"]: r for r in csv.DictReader(f)}
+        self.assertEqual(hs["new@x.com"]["Your Sales Rep"], "Piper Bucholz")  # new contact: filled
+        self.assertEqual(hs["s@x.com"]["Your Sales Rep"], "")                # existing contact: CRM value kept
 
     def test_rejects_excel_resaved_export(self):
         bad = row("a1", "iPad A", "10/6/26", "2026-10-06T14:00:00Z", rec="1001")

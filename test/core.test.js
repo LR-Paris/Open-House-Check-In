@@ -236,6 +236,22 @@ test('walk-in check-in: email matches an RSVP', () => {
   assert.equal(c.groupToday, 3);
 });
 
+test('sales rep: the new-guest answer, else the rep on the RSVP', () => {
+  assert.equal(sarah.rep, 'Piper Bucholz');
+  const lookup = core.buildCheckin({ path: 'lookup', rsvp: sarah, first: 'Sarah', last: 'Kim', company: 'MC', groupAnswer: 'same', bring: 1 }, 'iPad A', NOW);
+  assert.equal(lookup.salesRep, 'Piper Bucholz');
+  const walkin = core.buildCheckin({ path: 'walk_in', rsvp: null, first: 'Neo', last: 'Guest', company: 'N', email: 'n@x.com', jobTitle: 'Buyer', salesRep: 'Kia Glover', walkinGroup: 1, walkinDays: [], walkinSlot: null }, 'iPad A', NOW);
+  assert.equal(walkin.salesRep, 'Kia Glover');
+  const blank = core.buildCheckin({ path: 'walk_in', rsvp: null, first: 'Neo', last: 'Guest', company: 'N', email: 'n@x.com', jobTitle: 'Buyer', salesRep: null, walkinGroup: 1, walkinDays: [], walkinSlot: null }, 'iPad A', NOW);
+  assert.equal(blank.salesRep, null);
+  const matched = core.buildCheckin({ path: 'walk_in', rsvp: sarah, first: 'Sarah', last: 'Kim', company: 'MC', email: 'sarah.kim@example.com', jobTitle: 'Buyer', salesRep: null, walkinGroup: 1, walkinDays: [], walkinSlot: null }, 'iPad A', NOW);
+  assert.equal(matched.salesRep, 'Piper Bucholz');
+  const csv = core.checkinsToCsv([walkin]);
+  assert.match(csv.split('\r\n')[0], /"job_title","sales_rep"/);
+  assert.match(csv, /"Kia Glover"/);
+  assert.ok(core.EVENT.reps.includes('None. Please assign me one'));
+});
+
 test('walk-in check-in: not on the list', () => {
   const c = core.buildCheckin({ path: 'walk_in', rsvp: null, first: 'Taylor', last: 'Morgan', company: 'T', email: 't@x.com', walkinGroup: 1, walkinDays: ['2026-10-07'], walkinSlot: '9:00am - 10:00am' }, 'iPad A', NOW);
   assert.equal(c.rsvpKey, null);

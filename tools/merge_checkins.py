@@ -13,8 +13,9 @@ Check-ins dated outside Oct 6-8 (tests, dry run) are ignored unless --include-no
 Writes, in OUTPUT_DIR (default: current directory):
     attendance_master.csv   one row per person per event day (names as typed/confirmed at the door)
     hubspot_import.csv      one row per person: Record ID / Email / days attended (";Oct 6;Oct 7") / largest group.
-                            Name columns are filled only for people with no Record ID (new contacts), so an
-                            import keyed on Record ID never overwrites CRM names with door-typed values.
+                            Name, company, job title and sales rep are filled only for people with no Record ID
+                            (new contacts), so an import keyed on Record ID never overwrites CRM values with
+                            door-typed ones.
 Prints counts only (no names).
 
 Standard library only. Python 3.9+.
@@ -37,12 +38,12 @@ ISO_UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T[\d:.]+Z$")
 
 MASTER_COLUMNS = [
     "event_date", "person_key", "record_id", "first_name", "last_name", "company", "email", "job_title",
-    "on_rsvp_list", "path", "email_matched", "rsvp_status", "rsvp_days", "party_size_on_rsvp",
+    "sales_rep", "on_rsvp_list", "path", "email_matched", "rsvp_status", "rsvp_days", "party_size_on_rsvp",
     "group_size_today", "group_changed", "first_checked_in_at_local", "first_checked_in_at_utc",
     "devices", "duplicate_rows",
 ]
 HUBSPOT_COLUMNS = ["Record ID", "Email", "First Name", "Last Name", "Company Name", "Job Title",
-                   "Open House Days Attended", "Open House Largest Group"]
+                   "Your Sales Rep", "Open House Days Attended", "Open House Largest Group"]
 
 
 def unguard(value: str) -> str:
@@ -156,6 +157,7 @@ def merge(files: list[str], include_non_event_days: bool = False) -> tuple[list[
             "company": base.get("company", ""),
             "email": next((r["email"] for r in items if r.get("email")), ""),
             "job_title": next((r["job_title"] for r in items if r.get("job_title")), ""),
+            "sales_rep": next((r["sales_rep"] for r in items if r.get("sales_rep")), ""),  # absent in v1.0 exports
             "on_rsvp_list": "true" if any(r.get("record_id") for r in items) else "false",
             "path": base.get("path", ""),
             "email_matched": "true" if any((r.get("email_matched") or "").lower() == "true" for r in items) else "false",
@@ -176,6 +178,7 @@ def merge(files: list[str], include_non_event_days: bool = False) -> tuple[list[
         p = people.setdefault(m["person_key"], {
             "Record ID": m["record_id"], "Email": m["email"], "First Name": m["first_name"],
             "Last Name": m["last_name"], "Company Name": m["company"], "Job Title": m["job_title"],
+            "Your Sales Rep": m["sales_rep"],
             "_days": set(), "Open House Largest Group": 0,
         })
         p["_days"].add(m["event_date"])
@@ -185,7 +188,7 @@ def merge(files: list[str], include_non_event_days: bool = False) -> tuple[list[
         days = sorted(p.pop("_days"))
         p["Open House Days Attended"] = ";" + ";".join(DAY_LABELS.get(d, d) for d in days)
         if p["Record ID"]:  # existing contact: never overwrite CRM identity with door-typed values
-            for col in ("First Name", "Last Name", "Company Name", "Job Title"):
+            for col in ("First Name", "Last Name", "Company Name", "Job Title", "Your Sales Rep"):
                 p[col] = ""
         hubspot.append(p)
 
