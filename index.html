@@ -64,6 +64,7 @@ button{font-family:inherit}
 .stage.wide{max-width:980px}
 .screen{display:none;animation:rise .42s cubic-bezier(.2,.7,.2,1) both}
 .screen.active{display:block}
+.screen.entering{pointer-events:none}
 @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 
 .eyebrow{font-family:var(--serif);font-style:italic;font-weight:300;font-size:clamp(17px,2.2vw,21px);color:var(--muted);margin:0 0 14px}

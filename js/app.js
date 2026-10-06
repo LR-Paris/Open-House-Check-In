@@ -35,6 +35,10 @@ const S = {
   pendingImport: null,
   dataView: null,   // the RSVP / check-in table on the data screen: { kind, columns, rows, sortCol, sortDir }
   modal: false,     // share sheet / Files picker open: the page gets no touches, so don't idle-reset under it
+  modalSince: 0,    // when modal was set; it expires after MODAL_MAX_MS so a missed event can never pin a screen open
+  sharing: false,   // an export share sheet is opening: a second tap must not start another
+  sharingSince: 0,
+  enterTimer: null, // input guard after a screen change (double taps)
   // environment
   storageFailed: false,
   hadController: false,
@@ -70,6 +74,11 @@ function nudge(msg, ms = 2400) {
 }
 function hideNudge() { clearTimeout(nudgeTimer); $('#nudge').classList.remove('show'); }
 
+const MODAL_MAX_MS = 5 * 60_000;
+const modalActive = () => S.modal && Date.now() - S.modalSince < MODAL_MAX_MS;
+function setModal() { S.modal = true; S.modalSince = Date.now(); }
+// iPhone/iPad (iPadOS reports itself as a Mac with touch): exports go through the share sheet; laptops download
+const isAppleTouch = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
 const today = () => core.ymdInTz(new Date());
 
@@ -78,6 +87,11 @@ function show(id) {
   const screen = $('#s-' + id);
   void screen.offsetWidth; // restart the rise animation
   screen.classList.add('active');
+  // the second tap of a double tap must not land on the new screen (e.g. on "Complete sign-in")
+  $$('.screen').forEach(s => s.classList.remove('entering'));
+  screen.classList.add('entering');
+  clearTimeout(S.enterTimer);
+  S.enterTimer = setTimeout(() => screen.classList.remove('entering'), 450);
   S.screen = id;
   S.lastActivity = Date.now();
   const chip = $('#viewChip');
@@ -125,7 +139,7 @@ function resetAdmin() {
 
 /** Every path back to the guest start screen goes through here. */
 function goHome() {
-  if (S.updateReady && !S.busy && !S.modal) { location.reload(); return; }
+  if (S.updateReady && !S.busy && !modalActive()) { location.reload(); return; }
   resetGuest();
   resetAdmin();
   if (S.storageFailed) {
@@ -150,7 +164,7 @@ function goHome() {
 
 function checkIdle() {
   const limit = core.IDLE_MS[S.screen];
-  if (!limit || S.busy || S.modal) return;
+  if (!limit || S.busy || modalActive()) return;
   if (Date.now() - S.lastActivity > limit) goHome();
 }
 
@@ -193,8 +207,8 @@ function doLookup() {
         r.company ? el('span', { class: 'co', text: r.company }) : null),
       el('span', { class: 'arrow', 'aria-hidden': 'true', text: '→' })));
   }
-  if (!exact || single) box.append(el('button', { class: 'link', dataset: { action: 'go-walkin-carry' }, text: 'Not you? Sign in as a new guest →' }));
-  box.firstElementChild?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  box.append(el('button', { class: 'link', dataset: { action: 'go-walkin-carry' }, text: 'Not you? Sign in as a new guest →' }));
+  box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 // ---------------------------------------------------------------- guest: confirm
@@ -330,7 +344,7 @@ async function save(rec, firstName, btn) {
   const flow = S.flow;
   btn.disabled = true;
   btn.textContent = 'Saving…';
-  let outcome = 'created', error = null;
+  let outcome = 'created', failed = false;
   try {
     const existing = core.findSameDay(S.checkins, rec);
     if (existing) {
@@ -345,14 +359,14 @@ async function save(rec, firstName, btn) {
       S.checkins.push(rec);
     }
   } catch (err) {
-    error = err;
+    failed = true; // judged by the catch, never by the error value (WebKit can reject with null)
     console.error('Check-in save failed:', err?.name || err);
   }
   S.busy = false;
   if (flow !== S.flow) return; // the screen was reset meanwhile: never paint onto the next guest
   btn.textContent = SUBMIT_LABEL;
   btn.disabled = false;
-  if (!error) {
+  if (!failed) {
     S.saveFailures = 0;
     return showThanks(firstName, outcome, rec.path);
   }
@@ -466,7 +480,7 @@ async function renderAdmin() {
     el('span', { text: `Version ${core.VERSION}${off.build ? ' · build ' + off.build.slice(0, 7) : ''}` }),
     el('span', {}, 'Works offline: ', yes(off.ready, 'yes', 'NOT YET — keep wifi on and tap Reload app')),
     el('span', {}, 'Storage protected: ', yes(S.persisted, 'yes', 'no', 'unknown')),
-    el('span', {}, 'Running as: ', isStandalone() ? el('span', { class: 'ok', text: 'Home Screen app' }) : el('span', { class: 'bad', text: 'Safari tab — use the Home Screen icon' })),
+    el('span', {}, 'Running as: ', isStandalone() ? el('span', { class: 'ok', text: isAppleTouch() ? 'Home Screen app' : 'installed app window' }) : ALLOW_BROWSER_TAB && !isAppleTouch() ? el('span', { text: 'browser tab (?browser)' }) : el('span', { class: 'bad', text: 'Safari tab — use the Home Screen icon' })),
     el('span', {}, 'Mode: ', S.settings.walkinOnly ? el('span', { class: 'warn', text: 'walk-in only' }) : el('span', { text: 'normal' })),
   );
 
@@ -503,7 +517,7 @@ async function renderAdmin() {
 
   const un = core.unexportedCount(S.checkins, S.settings.lastExportAtUtc);
   $('#admExportInfo').replaceChildren(
-    un ? el('span', { class: 'warn', text: `${un} check-in(s) not shared yet. ` }) : el('span', { class: 'ok', text: 'Nothing new since the last share. ' }),
+    un ? el('span', { class: 'warn', text: `${un} check-in(s) not shared yet. ` }) : !S.settings.lastExportAtUtc ? el('span', { class: 'muted', text: 'Nothing to share yet. ' }) : el('span', { class: 'ok', text: 'Nothing new since the last share. ' }),
     el('span', { class: 'muted', text: S.settings.lastExportAtLocal ? `Last shared ${S.settings.lastExportAtLocal} (${S.settings.lastExportCount} rows) — check it reached the laptop / OneDrive. ` : 'Not shared yet. ' }),
     el('span', { class: 'muted', text: `${S.checkins.length} check-in(s) stored on this iPad in total.` }),
   );
@@ -668,37 +682,65 @@ function rebuildRsvpIndex() {
 
 /** Must stay synchronous up to navigator.share(): iPadOS only allows sharing straight from the tap. */
 function exportCheckins() {
+  if (S.sharing && Date.now() - S.sharingSince < 3000) return; // the same double tap, before the sheet appears
+  if (isAppleTouch()) return shareCheckins();
+  return downloadCheckins();
+}
+
+/** iPad/iPhone: the share sheet (Save to Files, AirDrop). Runs synchronously inside the tap, as WebKit requires. */
+function shareCheckins() {
   if (!S.checkins.length) return nudge('There are no check-ins to export yet.');
   const now = new Date();
   const csv = core.checkinsToCsv(S.checkins);
   const name = core.exportFileName(S.settings.device, now);
   const file = new File([csv], name, { type: 'text/csv' });
-  const done = () => recordExport(now, S.checkins.length);
-  if (navigator.canShare?.({ files: [file] })) {
-    S.modal = true;
-    navigator.share({ files: [file] })
-      .then(done)
-      .catch(err => { if (err?.name !== 'AbortError') nudge(`Export failed (${err?.name || 'error'}). Try again, or try AirDrop.`, 5000); })
-      .finally(() => { S.modal = false; S.lastActivity = Date.now(); });
-    return;
+  const count = S.checkins.length;
+  if (!navigator.canShare?.({ files: [file] })) {
+    return nudge('Sharing files isn’t available on this iPad (needs iPadOS 15 or later).', 5000);
   }
-  if (isStandalone()) return nudge('Sharing files isn’t available on this iPad (needs iPadOS 15 or later).', 5000);
-  // Desktop browsers / testing only: plain download (never used in the Home Screen app — it can trap the app).
-  const url = URL.createObjectURL(new Blob([csv], { type: 'application/octet-stream' }));
+  setModal();
+  S.sharing = true;
+  S.sharingSince = Date.now();
+  navigator.share({ files: [file] })
+    .then(() => recordExport(now, count))
+    .catch(err => {
+      if (err?.name === 'AbortError') return;
+      nudge(err?.name === 'InvalidStateError'
+        ? 'An earlier share is still open. Tap Reload app below, then Export again. The check-ins are safe on this iPad.'
+        : `Export failed (${err?.name || 'error'}). Try again, or try AirDrop.`, 6000);
+    })
+    .finally(() => { S.sharing = false; S.modal = false; S.lastActivity = Date.now(); });
+}
+
+/** Laptops: save the CSV to the Downloads folder. Re-reads storage first, so check-ins from another window are included. */
+async function downloadCheckins() {
+  try { S.checkins = await db.getAllCheckins(); } catch {}
+  if (!S.checkins.length) return nudge('There are no check-ins to export yet.');
+  const now = new Date();
+  const csv = core.checkinsToCsv(S.checkins);
+  const name = core.exportFileName(S.settings.device, now);
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   const a = el('a', { href: url, download: name });
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  done();
+  // a download can fail or be blocked without the page knowing: only a confirmed file counts as exported
+  // (an export is what allows Clear everything)
+  await new Promise(r => setTimeout(r, 1500));
+  if (window.confirm(`Is ${name} in your Downloads folder?\n\nOK = yes, it's there. Cancel = no, it isn't.`)) {
+    await recordExport(now, S.checkins.length, `Exported: ${name}.`);
+  } else {
+    nudge('Not counted as exported. Check the browser\'s download settings, then tap Export check-ins again.', 6000);
+  }
 }
 
-async function recordExport(now, count) {
+async function recordExport(now, count, message = 'Shared. Check that the file arrived on the laptop / in OneDrive.') {
   try {
     await saveSettings({ lastExportAtUtc: now.toISOString(), lastExportAtLocal: core.localStamp(now), lastExportCount: count });
   } catch {}
   if (S.screen === 'admin') renderAdmin();
-  nudge('Shared. Check that the file arrived on the laptop / in OneDrive.', 4000);
+  nudge(message, 5000);
 }
 
 // ---------------------------------------------------------------- admin: settings + maintenance
@@ -751,6 +793,7 @@ async function clearTestCheckins() {
 
 async function clearAll() {
   if ($('#admClearAll').value.trim().toUpperCase() !== 'DELETE') return nudge('Type DELETE to confirm.');
+  try { S.checkins = await db.getAllCheckins(); } catch {} // another window may have saved check-ins since boot
   const un = core.unexportedCount(S.checkins, S.settings.lastExportAtUtc);
   if (un > 0) return nudge(`${un} check-in(s) haven't been exported. Export first, check the file on the laptop, then clear.`, 6000);
   try { await db.clearEverything(); }
@@ -835,7 +878,8 @@ function wire() {
   });
   $('#chg').addEventListener('change', onChg);
   $('#importFile').addEventListener('change', onImportFile);
-  $('label[for="importFile"]').addEventListener('click', () => { S.modal = true; }); // Files picker opening
+  $('label[for="importFile"]').addEventListener('click', setModal); // Files picker opening
+  $('#importFile').addEventListener('cancel', () => { S.modal = false; S.lastActivity = Date.now(); }); // picker dismissed
   $('#admWalkinOnly').addEventListener('change', () => toggleWalkinOnly().catch(() => {}));
   const onEnter = (sel, fn) => $(sel).addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); fn(); }
@@ -847,7 +891,7 @@ function wire() {
   $('#dataSearch').addEventListener('input', renderData);
   window.addEventListener('resize', fitDataTable);
 
-  for (const ev of ['pointerdown', 'keydown', 'input', 'change']) {
+  for (const ev of ['pointerdown', 'keydown', 'input', 'change', 'wheel']) {
     document.addEventListener(ev, () => {
       S.lastActivity = Date.now();
       if (ev === 'pointerdown') S.modal = false; // a touch on the page means no native sheet is open
@@ -889,7 +933,11 @@ async function boot() {
   try {
     const [settings, rsvpData, checkins] = await Promise.all([db.kvGet('settings'), db.kvGet('rsvps'), db.getAllCheckins()]);
     if (settings) S.settings = { ...S.settings, ...settings };
-    if (rsvpData?.rows) { S.rsvps = rsvpData.rows; S.rsvpMeta = rsvpData.meta; }
+    if (rsvpData?.rows) {
+      // refresh the name matching keys with the current rules (not the record keys: saved check-ins point at those)
+      S.rsvps = rsvpData.rows.map(r => ({ ...r, firstNorm: core.normalizeName(r.first), lastNorm: core.normalizeName(r.last) }));
+      S.rsvpMeta = rsvpData.meta;
+    }
     S.checkins = checkins ?? [];
     rebuildRsvpIndex();
   } catch (err) {

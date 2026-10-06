@@ -1,7 +1,7 @@
 // Open House kiosk — pure logic. No DOM, no storage.
 // Imported by js/app.js in the browser and by test/core.test.js in Node.
 
-export const VERSION = '1.2.1'; // human label shown in the admin view; the service worker's BUILD hash is what forces updates
+export const VERSION = '1.2.2'; // human label shown in the admin view; the service worker's BUILD hash is what forces updates
 
 export const EVENT = {
   tz: 'America/New_York',
@@ -46,6 +46,7 @@ export function normalizeName(s) {
     .normalize('NFKD').replace(/\p{M}+/gu, '')
     .toLowerCase()
     .replace(/ß/g, 'ss').replace(/æ/g, 'ae').replace(/œ/g, 'oe').replace(/ø/g, 'o').replace(/ł/g, 'l').replace(/đ/g, 'd')
+    .replace(/ı/g, 'i').replace(/ð/g, 'd').replace(/þ/g, 'th')
     .replace(/['’‘`´]/g, '')            // O'Brien == OBrien
     .replace(/[^\p{L}\p{N}]+/gu, ' ')   // hyphens, dots, commas → word breaks
     .trim();
@@ -182,13 +183,25 @@ const DECLINE_KEY = normKey(EVENT.declineDayLabel);
 const SLOT_BY_KEY = new Map(EVENT.slots.map(s => [normKey(s), s]));
 const LABEL_BY_DATE = new Map(EVENT.days.map(d => [d.date, d.label]));
 
+const EVENT_MONTH = EVENT.days[0].date.slice(5, 7), EVENT_YEAR = EVENT.days[0].date.slice(0, 4);
+/** An event day as Excel writes it after a re-save ("6-Oct", "Oct-06", "10/6/2026", "2026-10-06"), else null. */
+function excelDay(part) {
+  const p = String(part).trim();
+  const m = p.match(/^(\d{1,2})-oct(?:-\d{2,4})?$/i) || p.match(/^oct-(\d{1,2})$/i)
+    || p.match(new RegExp(`^${Number(EVENT_MONTH)}/(\\d{1,2})(?:/(?:\\d{2}|\\d{4}))?$`))
+    || p.match(new RegExp(`^${EVENT_YEAR}-${EVENT_MONTH}-(\\d{2})$`));
+  if (!m) return null;
+  const date = `${EVENT_YEAR}-${EVENT_MONTH}-${String(Number(m[1])).padStart(2, '0')}`;
+  return LABEL_BY_DATE.has(date) ? date : null;
+}
+
 /** "Oct 6;Oct 8" → { dates: ['2026-10-06','2026-10-08'], unknown: [] }. The decline option is dropped silently. */
 export function mapDays(cell) {
   const dates = [], unknown = [];
   for (const part of String(cell ?? '').split(/[;,]/)) {
     const k = normKey(part);
     if (!k || k === DECLINE_KEY) continue;
-    const d = DAY_BY_KEY.get(k);
+    const d = DAY_BY_KEY.get(k) ?? excelDay(part);
     if (d) { if (!dates.includes(d)) dates.push(d); } else unknown.push(part.trim());
   }
   return { dates: dates.sort(), unknown };
@@ -212,6 +225,22 @@ export const isGoing = status => normKey(status) === normKey(EVENT.goingStatus);
 
 // UTF-8 read as Latin-1/Windows-1252 ("Ã©"), or bytes that were not UTF-8 at all (U+FFFD).
 const GARBLED = /[ÃÂ][\u0080-¿]|�/;
+// Windows-1252 bytes 0x80-0x9F as characters, to undo a cp1252 misreading byte for byte
+const CP1252_HI = '€\x81‚ƒ„…†‡ˆ‰Š‹Œ\x8DŽ\x8F\x90‘’“”•–—˜™š›œ\x9DžŸ';
+/** True when text is UTF-8 that was read as Windows-1252/Latin-1 ("HÃ©lÃ¨ne", "Oâ€™Brien"), or contains U+FFFD. */
+function looksGarbled(text) {
+  if (GARBLED.test(text)) return true;
+  if (!/[^\x00-\x7F]/.test(text)) return false;
+  const bytes = [];
+  for (const ch of text) {
+    const c = ch.codePointAt(0), hi = CP1252_HI.indexOf(ch);
+    if (c < 0x80 || (c >= 0xA0 && c <= 0xFF)) bytes.push(c);
+    else if (hi >= 0) bytes.push(0x80 + hi);
+    else return false; // a character cp1252 can't produce: real text, not mojibake
+  }
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes)) !== text; }
+  catch { return false; } // not valid UTF-8 underneath: a genuine accented name
+}
 
 export function rsvpKeyOf({ recordId, email, first, last }) {
   if (recordId) return 'rec:' + recordId;
@@ -245,10 +274,14 @@ export function parseRsvpCsv(text) {
   if (missingRecommended.length) {
     warnings.push('Missing column(s): ' + missingRecommended.map(f => FIELD_ALIASES[f][0]).join(', ') + '.');
   }
+  if (missingRecommended.includes('recordId')) {
+    warnings.push('Without Record ID, check-ins can\'t be linked to HubSpot contacts. Add Record ID to the saved HubSpot view and export again.');
+  }
 
   const get = (r, f) => (f in idx ? r[idx[f]] : undefined);
   const byKey = new Map();
-  let noName = 0, noStatus = 0, badParty = 0, dupRecord = 0, badRecordId = 0, garbled = 0;
+  let noName = 0, noStatus = 0, badParty = 0, dupRecord = 0, badRecordId = 0, nonAscii = 0;
+  const garbledNames = [];
   const unknownDays = new Set(), unknownSlots = new Set();
 
   for (const r of table.slice(1)) {
@@ -258,7 +291,9 @@ export function parseRsvpCsv(text) {
     if (!clean(get(r, 'status'))) { noStatus++; continue; }
     const rid = clean(get(r, 'recordId'));
     if (rid && !/^\d+$/.test(rid)) badRecordId++;
-    if (GARBLED.test(first + last + (clean(get(r, 'company')) ?? ''))) garbled++;
+    const nameText = first + last + (clean(get(r, 'company')) ?? '');
+    if (/[^\x00-\x7F]/.test(nameText)) nonAscii++;
+    if (looksGarbled(nameText)) garbledNames.push(`${first} ${last}`.trim());
     const days = mapDays(get(r, 'days'));
     days.unknown.forEach(u => unknownDays.add(u));
     const slotRaw = clean(get(r, 'slot'));
@@ -285,7 +320,11 @@ export function parseRsvpCsv(text) {
   }
   const rows = [...byKey.values()];
   if (badRecordId) return fail(`${badRecordId} Record ID(s) look changed (e.g. 1.23457E+11): the file was re-saved by Excel. Import the original HubSpot download.`);
-  if (garbled) return fail(`${garbled} name(s) look garbled (e.g. "Ã©" instead of "é"): the file was re-saved by another program. Import the original HubSpot download.`);
+  // a whole-file re-encode garbles most accented names; one or two odd records are just how they are in HubSpot
+  if (garbledNames.length && garbledNames.length >= Math.max(2, nonAscii / 2)) {
+    return fail(`${garbledNames.length} name(s) look garbled (e.g. "Ã©" instead of "é"): the file was re-saved by another program. Import the original HubSpot download.`);
+  }
+  if (garbledNames.length) warnings.push(`${garbledNames.length} name(s) have odd characters in HubSpot (${garbledNames.slice(0, 3).join(', ')}). Imported as they are; fix them in HubSpot later.`);
   if (!rows.length) return fail('No RSVP rows were found (rows need a name and an "Open House RSVP" value).');
 
   if (noName) warnings.push(`${noName} row(s) skipped: no first or last name.`);
@@ -334,8 +373,16 @@ export function rsvpReport(rows) {
 
 const squash = s => s.replace(/ /g, ''); // "van der berg" == "vanderberg"
 
+const PARTICLES = new Set(['de', 'da', 'do', 'dos', 'das', 'del', 'della', 'di', 'du', 'la', 'le', 'van', 'von', 'der', 'den', 'ter', 'ten', 'y', 'e', 'al', 'el', 'bin', 'st']);
+const nameWords = s => s.split(' ').filter(w => w.length >= 2 && !PARTICLES.has(w));
+/** Best similarity of one typed word to any real word of a compound name ("garcia" vs "garcia fernandez"). */
+const wordSim = (q, name) => (name.includes(' ') ? Math.max(0, ...nameWords(name).map(w => similarity(q, w))) : 0);
+
 function lastNameSimilar(ql, rl, cfg) {
-  return similarity(ql, rl) >= cfg.lastMin || (ql.includes(' ') !== rl.includes(' ') && similarity(squash(ql), squash(rl)) >= cfg.lastMin);
+  return similarity(ql, rl) >= cfg.lastMin
+    || (ql.includes(' ') !== rl.includes(' ') && similarity(squash(ql), squash(rl)) >= cfg.lastMin)
+    || (!ql.includes(' ') && wordSim(ql, rl) >= cfg.lastMin)
+    || (!rl.includes(' ') && wordSim(rl, ql) >= cfg.lastMin);
 }
 
 function passes(qf, ql, rf, rl, cfg) {
@@ -372,12 +419,15 @@ function lookupOne(rsvps, q, cfg) {
     const full = `${r.firstNorm} ${r.lastNorm}`.trim(), rev = `${r.lastNorm} ${r.firstNorm}`.trim();
     if ([r.firstNorm, r.lastNorm, full, rev].some(v => v && sameNorm(v, q))) { exact.push({ r, score: 1 }); continue; }
     if (words.length === 1) {
-      const score = Math.max(
+      const direct = Math.max(
         r.firstNorm ? similarity(q, r.firstNorm) : 0,
         r.lastNorm ? similarity(q, r.lastNorm) : 0,
         r.lastNorm.includes(' ') ? similarity(q, squash(r.lastNorm)) : 0,
         similarity(q, full));
-      if (score >= cfg.singleMin) fuzzy.push({ r, score });
+      const word = Math.max(wordSim(q, r.firstNorm), wordSim(q, r.lastNorm));
+      // a whole-name match always ranks above a match on one word of a compound name
+      if (direct >= cfg.singleMin) fuzzy.push({ r, score: 1 + direct });
+      else if (word >= cfg.singleMin) fuzzy.push({ r, score: word });
       continue;
     }
     let hit = false;

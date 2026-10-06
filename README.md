@@ -117,7 +117,9 @@ The importer matches columns by name, accepting HubSpot labels or internal names
 | Close | Export again from both iPads. The admin view shows how many check-ins haven't been exported yet. |
 | Evening | On the laptop, run the merge (§5). Print tomorrow's door list from the HubSpot export in Excel (last name, first name, company, day). |
 
-Keep a **paper sign-in sheet** at the door as a backup, and type any paper entries in through the new-guest form later.
+Keep a **paper sign-in sheet** at the door as a backup. Type paper entries in through the new-guest form **the same day, before midnight**: the app dates every check-in with the day it is typed. An entry typed on a later day counts on the wrong day, and one typed after Oct 8 is treated as a test (the merge ignores it and *Clear test check-ins* deletes it). For entries you can't type the same day, add them to the merged spreadsheet by hand instead.
+
+**Laptops instead of iPads:** install the app (Edge/Chrome: … › Apps › *Install this site as an app*; Safari: File › *Add to Dock*) or open `https://lr-paris.github.io/Open-House-Check-In/?browser`. The address is case-sensitive. Use **one window only** and always the same browser and user account. Use a browser profile with no saved addresses or names, so the browser can't offer a staffer's details to guests. On a laptop, *Export check-ins* saves the CSV straight to the **Downloads** folder.
 
 **Never** delete the Home Screen icon (iPadOS calls it "Delete Bookmark"), open the URL in a Safari tab, or clear Safari website data. **Never** use *Clear everything* before exporting. Any of these loses the check-ins.
 

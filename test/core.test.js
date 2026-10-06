@@ -123,7 +123,8 @@ test('import refuses the wrong files', () => {
   assert.match(core.parseRsvpCsv(kiosk).errors[0], /check-ins export/);
   const H = 'Record ID,First Name,Last Name,Email,Open House RSVP\n';
   assert.match(core.parseRsvpCsv(H + '1.23457E+11,Ann,Lee,a@x.com,I\'m Going\n').errors[0], /re-saved by Excel/);
-  assert.match(core.parseRsvpCsv(H + '7,HÃ©lÃ¨ne,DuprÃ©,h@x.com,I\'m Going\n').errors[0], /garbled/);
+  assert.match(core.parseRsvpCsv(H + '7,HÃ©lÃ¨ne,DuprÃ©,h@x.com,I\'m Going\n8,ZoÃ«,Ã…ngstrÃ¶m,z@x.com,I\'m Going\n').errors[0], /garbled/);
+  assert.match(core.parseRsvpCsv(H + '7,HÃ©lÃ¨ne,DuprÃ©,h@x.com,I\'m Going\n').warnings.join(), /odd characters/); // one record: imported, flagged
   assert.match(core.parseRsvpCsv(H + '7,"Jo,Lee,a@x.com,I\'m Going\n').errors[0], /quote/);
   assert.match(core.parseRsvpCsv('Record ID,First Name,Last Name,Email\n1,A,B,a@b.co\n').errors[0], /Open House RSVP/); // plain contacts export
 });
@@ -460,4 +461,68 @@ test('service worker caches every file the page uses', () => {
     assert.ok(existsSync(join(ROOT, ref)), `index.html references missing file ${ref}`);
     assert.ok(assets.includes(ref), `index.html references ${ref} but sw.js does not cache it`);
   }
+});
+
+// ---------- v1.2.2 event-day fixes ----------
+
+test('import: Excel-rendered event days still map to the event day', () => {
+  for (const [v, d] of [['6-Oct', '2026-10-06'], ['Oct-07', '2026-10-07'], ['10/8/2026', '2026-10-08'], ['2026-10-07', '2026-10-07'], ['6-Oct-26', '2026-10-06']]) {
+    assert.deepEqual(core.mapDays(v).dates, [d], v);
+  }
+  assert.deepEqual(core.mapDays('9-Oct').dates, []);
+  assert.deepEqual(core.mapDays('9-Oct').unknown, ['9-Oct']);
+});
+
+test('import: one garbled record imports with a warning; a whole-file re-encode is refused', () => {
+  const H = 'Record ID,First Name,Last Name,Email,Open House RSVP\n';
+  const one = core.parseRsvpCsv(H + '1,Ren�e,Lee,r@x.com,I\'m Going\n2,Ann,Kim,a@x.com,I\'m Going\n3,Hélène,Dupré,h@x.com,I\'m Going\n');
+  assert.equal(one.ok, true);
+  assert.equal(one.rows.length, 3);
+  assert.match(one.warnings.join(), /odd characters/);
+  const many = core.parseRsvpCsv(H + '1,HÃ©lÃ¨ne,DuprÃ©,h@x.com,I\'m Going\n2,ZoÃ«,Ã…ngstrÃ¶m,z@x.com,I\'m Going\n3,Ann,Kim,a@x.com,I\'m Going\n');
+  assert.match(many.errors[0], /garbled/);
+});
+
+test('import: a file without Record ID says what that costs', () => {
+  const p = core.parseRsvpCsv('First Name,Last Name,Email,Open House RSVP\nAnn,Kim,a@x.com,I\'m Going\n');
+  assert.equal(p.ok, true);
+  assert.match(p.warnings.join(), /Record ID/);
+});
+
+test('lookup: Turkish dotless i and Icelandic letters fold to plain letters', () => {
+  assert.equal(core.normalizeName('Yıldız'), 'yildiz');
+  assert.equal(core.normalizeName('Guðrún Þórsdóttir'), 'gudrun thorsdottir');
+  const rows = [{ key: 'y', first: 'Ayşe', last: 'Yıldız', firstNorm: core.normalizeName('Ayşe'), lastNorm: core.normalizeName('Yıldız'), company: 'T' }];
+  assert.equal(core.lookup(rows, 'Ayse', 'Yildiz').exact, true);
+});
+
+test('lookup: one word of a compound or hyphenated surname finds the guest, and links the new-guest form', () => {
+  const mk = (first, last, email) => ({ key: email, first, last, email, firstNorm: core.normalizeName(first), lastNorm: core.normalizeName(last), company: 'C' });
+  const rows = [mk('María José', 'García Fernández', 'mj@x.com'), mk('Sarah', 'Lee-Richardson', 'slr@x.com'), mk('Nicole', 'de la Cruz', 'n@x.com'), mk('Ann', 'Kim', 'a@x.com')];
+  const names = res => res.matches.map(r => `${r.first} ${r.last}`);
+  assert.deepEqual(names(core.lookup(rows, 'Maria', 'Garcia')), ['María José García Fernández']);
+  assert.deepEqual(names(core.lookup(rows, 'Maria Jose', 'Fernandez')), ['María José García Fernández']);
+  assert.deepEqual(names(core.lookup(rows, 'Sarah', 'Lee')), ['Sarah Lee-Richardson']);
+  assert.deepEqual(names(core.lookup(rows, 'Sarah', 'Richardson')), ['Sarah Lee-Richardson']);
+  assert.deepEqual(names(core.lookup(rows, 'Nicole', 'Cruz')), ['Nicole de la Cruz']);
+  assert.deepEqual(names(core.lookup(rows, '', 'Garcia')), ['María José García Fernández']);
+  assert.equal(core.lookup(rows, 'Ann', 'Lee').total, 0);                      // a different first name is still not offered
+  assert.equal(core.matchWalkinToRsvp(rows, 'MJ@x.com', 'Garcia')?.key, 'mj@x.com');
+  assert.equal(core.lookup(rows, 'Nicole', 'De').total, 0);                     // particles alone never match
+});
+
+test('import: a whole-file cp1252 re-encode is refused even without the "Ã" pattern', () => {
+  const H = 'Record ID,First Name,Last Name,Email,Company Name,Open House RSVP\n';
+  const bad = core.parseRsvpCsv(H + '1,Sean,Oâ€™Brien,s@x.com,Macyâ€™s,I\'m Going\n2,Zoe,DÃ¼rr,z@x.com,Câ€”Co,I\'m Going\n3,Ann,Kim,a@x.com,C,I\'m Going\n');
+  assert.match(bad.errors[0], /garbled/);
+  const good = core.parseRsvpCsv(H + '1,Ãngela,Åsa,a@x.com,Café™ Société,I\'m Going\n2,Ayşe,Yıldız,y@x.com,Macy’s,I\'m Going\n');
+  assert.equal(good.ok, true);
+  assert.equal(good.warnings.filter(w => /odd characters/.test(w)).length, 0);
+});
+
+test('lookup: one box, whole-name matches rank above compound-surname word matches', () => {
+  const mk = (first, last) => ({ key: first + last, first, last, firstNorm: core.normalizeName(first), lastNorm: core.normalizeName(last), company: 'C' });
+  const rows = [...Array.from({ length: 6 }, (_, i) => mk('P' + i, 'Garcia Lopez')), mk('Ana', 'Garcias')];
+  const res = core.lookup(rows, '', 'Garcias');
+  assert.equal(res.matches[0].last, 'Garcias');
 });

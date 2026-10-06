@@ -60,7 +60,8 @@ function runOnce(db, stores, mode, fn) {
       catch (err) { if (err?.name === 'InvalidStateError') throw err; t = db.transaction(stores, mode); }
     } catch (err) { finish(false, err); return; }
     t.oncomplete = () => finish(true, out instanceof IDBRequest ? out.result : out);
-    t.onerror = () => finish(false, t.error);
+    // a failed request reports here before the transaction's own error is set: never settle with null
+    t.onerror = e => finish(false, t.error || e.target?.error || new Error('IndexedDB request failed'));
     t.onabort = () => finish(false, t.error || new Error('Transaction aborted'));
     try { out = fn(t); } catch (err) { try { t.abort(); } catch {} finish(false, err); }
   });
