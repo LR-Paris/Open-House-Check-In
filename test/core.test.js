@@ -169,10 +169,51 @@ test('lookup: swapped names and accents', () => {
   assert.equal(h.exact, true);
 });
 
-test('lookup: needs both names; never more than 5', () => {
-  assert.equal(core.lookup(R, 'Sarah', '').matches.length, 0);
+test('lookup: one name in either box; never more than 5', () => {
+  const names = res => res.matches.map(r => `${r.first} ${r.last} / ${r.company}`);
+  assert.equal(core.lookup(R, '', '').matches.length, 0);
+  assert.equal(core.lookup(R, '  ', ' ').total, 0);
+  assert.deepEqual(names(core.lookup(R, '', 'Kim')), ['Sarah Kim / Maison Clair']);       // last name only
+  assert.deepEqual(names(core.lookup(R, 'Kim', '')), ['Sarah Kim / Maison Clair']);       // last name typed in First name
+  const alex = core.lookup(R, 'Alex', '');                                              // first name only
+  assert.equal(alex.exact, true);
+  assert.equal(alex.single, true);                                                      // screen asks "check it's you"
+  assert.equal(alex.total, 2);
+  assert.equal(core.lookup(R, 'Alex', 'Rivera').single, false);
+  assert.deepEqual(names(core.lookup(R, 'Sarah Kim', '')), ['Sarah Kim / Maison Clair']); // full name in one box
+  assert.deepEqual(names(core.lookup(R, 'Kim Sarah', '')), ['Sarah Kim / Maison Clair']);
+  assert.deepEqual(names(core.lookup(R, 'Sara Kim', '')), ['Sarah Kim / Maison Clair']);  // two-name rules, one typo
+  assert.equal(core.lookup(R, 'Sarah Lee', '').total, 0);                               // same as 'Sarah' + 'Lee'
+  assert.equal(core.lookup(R, 'Jordan Xu', '').total, 0);
+  assert.equal(core.lookup(R, 'Sarah', 'Lee').total, 0);
+  assert.deepEqual(names(core.lookup(R, '', 'Dupre')), ['Hélène Dupré / Dupré, Fils & Cie']);
+  const typo = core.lookup(R, '', 'Rivero');                                            // one wrong letter, long name
+  assert.equal(typo.exact, false);
+  assert.equal(typo.total, 2);
+  assert.equal(core.lookup(R, 'a', '').total, 0);                                       // a letter or two never lists guests
+  assert.equal(core.lookup(R, '', 'Ki').total, 0);
+  assert.equal(core.lookup(R, '', 'Kin').total, 0);                                     // short name, changed letter: not found
   const many = Array.from({ length: 9 }, (_, i) => ({ key: 'k' + i, first: 'Jo', last: 'Smith', firstNorm: 'jo', lastNorm: 'smith', company: 'C' + i }));
   assert.equal(core.lookup(many, 'Jo', 'Smith').matches.length, 5);
+  const smiths = core.lookup(many, '', 'Smith');
+  assert.equal(smiths.matches.length, 5);
+  assert.equal(smiths.total, 9);
+});
+
+test('lookup: one name lists exact matches first, then close ones', () => {
+  const rows = [...R, { key: 'x', first: 'Sara', last: 'Lopez', firstNorm: 'sara', lastNorm: 'lopez', company: 'Other Co' }];
+  const res = core.lookup(rows, 'Sara', '');
+  assert.equal(res.single, true);
+  assert.deepEqual(res.matches.map(r => `${r.first} ${r.last}`), ['Sara Lopez', 'Sarah Kim']);
+  assert.equal(res.total, 2);
+});
+
+test('lookup: one name with a compound surname', () => {
+  const rows = [{ key: 'a', first: 'Pieter', last: 'Van Der Berg', firstNorm: 'pieter', lastNorm: 'van der berg', company: 'X' }];
+  assert.equal(core.lookup(rows, '', 'Van der Berg').exact, true);
+  assert.equal(core.lookup(rows, '', 'Vanderberg').exact, true);
+  assert.equal(core.lookup(rows, '', 'Vanderburg').matches.length, 1);
+  assert.equal(core.lookup(rows, '', 'Van Der Burg').matches.length, 1);                // compound surname, typo, alone
 });
 
 test('lookup: compound surnames typed without spaces', () => {

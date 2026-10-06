@@ -140,7 +140,7 @@ The script prints counts only, never names. It uses Python's standard library, s
 ## 6. Test checklist (both iPads, in the Home Screen app, before Monday)
 
 1. Import the real CSV. The counts match HubSpot, and accented names look right in the preview.
-2. Look up real names: an exact match, a typo, two people with the same name, no match (which offers the new-guest form). Use the new-guest form with an RSVP'd email: it should say *already signed in* if that guest is already in, or otherwise link to their RSVP.
+2. Look up real names: an exact match, a last name only, a first name only, a typo, two people with the same name, no match (which offers the new-guest form). Use the new-guest form with an RSVP'd email: it should say *already signed in* if that guest is already in, or otherwise link to their RSVP.
 3. The same person twice gives *welcome back*. A bigger group the second time raises the number.
 4. Leave a screen half-filled and wait. It returns to Welcome, empty: after 60 s on lookup or confirm, 120 s on new guest, 20 s on thank you.
 5. **Airplane mode**, then force-quit the app and reopen it from the icon. It works, and the check-ins are still in the admin view. **Restart the iPad**: still there.

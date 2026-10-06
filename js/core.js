@@ -1,7 +1,7 @@
 // Open House kiosk — pure logic. No DOM, no storage.
 // Imported by js/app.js in the browser and by test/core.test.js in Node.
 
-export const VERSION = '1.2.0'; // human label shown in the admin view; the service worker's BUILD hash is what forces updates
+export const VERSION = '1.2.1'; // human label shown in the admin view; the service worker's BUILD hash is what forces updates
 
 export const EVENT = {
   tz: 'America/New_York',
@@ -28,7 +28,7 @@ export const EVENT = {
   ],
 };
 
-export const LOOKUP = { firstMin: 0.3, lastMin: 0.5, maxResults: 5 };
+export const LOOKUP = { firstMin: 0.3, lastMin: 0.5, singleMin: 0.5, maxResults: 5 };
 export const STEPPER_MAX = 20;
 export const PARTY_MAX = 50;
 export const IDLE_MS = { lookup: 60_000, confirm: 60_000, walkin: 120_000, thanks: 20_000, admin: 120_000, data: 120_000, pw: 60_000 };
@@ -346,14 +346,64 @@ function passes(qf, ql, rf, rl, cfg) {
 
 const sameNorm = (a, b) => a === b || squash(a) === squash(b);
 
+const byScoreThenName = (a, b) =>
+  b.score - a.score ||
+  a.r.lastNorm.localeCompare(b.r.lastNorm) ||
+  a.r.firstNorm.localeCompare(b.r.firstNorm) ||
+  String(a.r.company ?? '').localeCompare(String(b.r.company ?? ''));
+
+/** Exact matches win outright; otherwise the close ones. Capped; `total` is how many matched before the cap. */
+function rankMatches(exact, fuzzy, cfg) {
+  const list = (exact.length ? exact : fuzzy).sort(byScoreThenName);
+  return { matches: list.slice(0, cfg.maxResults).map(x => x.r), exact: exact.length > 0, total: list.length, single: false };
+}
+
 /**
- * Find RSVPs for a typed name. Exact (accent/case/space-insensitive) matches win outright;
- * otherwise per-field trigram similarity, also trying the names swapped.
- * Returns { matches: rsvp[], exact: boolean }.
+ * One box filled in. One word is matched against the first name, the last name or the full name, with a stricter
+ * similarity than the two-name search (singleMin), so a few letters never list the guest list. Several words
+ * ("Sarah Kim" typed in one box) follow the two-name rules on every split, or match a compound surname.
+ * A single name says less about who the guest is, so exact and close matches are both listed (exact first),
+ * and the result is flagged `single` so the screen always asks the guest to check it is them.
+ */
+function lookupOne(rsvps, q, cfg) {
+  const words = q.split(' ');
+  const exact = [], fuzzy = [];
+  for (const r of rsvps) {
+    const full = `${r.firstNorm} ${r.lastNorm}`.trim(), rev = `${r.lastNorm} ${r.firstNorm}`.trim();
+    if ([r.firstNorm, r.lastNorm, full, rev].some(v => v && sameNorm(v, q))) { exact.push({ r, score: 1 }); continue; }
+    if (words.length === 1) {
+      const score = Math.max(
+        r.firstNorm ? similarity(q, r.firstNorm) : 0,
+        r.lastNorm ? similarity(q, r.lastNorm) : 0,
+        r.lastNorm.includes(' ') ? similarity(q, squash(r.lastNorm)) : 0,
+        similarity(q, full));
+      if (score >= cfg.singleMin) fuzzy.push({ r, score });
+      continue;
+    }
+    let hit = false;
+    for (let i = 1; i < words.length && !hit; i++) {
+      const a = words.slice(0, i).join(' '), b = words.slice(i).join(' ');
+      hit = passes(a, b, r.firstNorm, r.lastNorm, cfg) || passes(b, a, r.firstNorm, r.lastNorm, cfg);
+    }
+    if (!hit && r.lastNorm.includes(' ')) hit = lastNameSimilar(q, r.lastNorm, cfg); // "Van Der Burg" alone
+    if (hit) fuzzy.push({ r, score: similarity(q, full) });
+  }
+  exact.sort(byScoreThenName);
+  fuzzy.sort(byScoreThenName);
+  const list = [...exact, ...fuzzy];
+  return { matches: list.slice(0, cfg.maxResults).map(x => x.r), exact: exact.length > 0, total: list.length, single: true };
+}
+
+/**
+ * Find RSVPs for a typed name. Either box may be empty: one name alone is matched against first and last names.
+ * With both names: exact (accent/case/space-insensitive) matches win outright; otherwise per-field trigram
+ * similarity, also trying the names swapped.
+ * Returns { matches: rsvp[], exact: boolean, total: number, single: boolean }.
  */
 export function lookup(rsvps, firstInput, lastInput, cfg = LOOKUP) {
   const qf = normalizeName(firstInput), ql = normalizeName(lastInput);
-  if (!qf || !ql) return { matches: [], exact: false };
+  if (!qf && !ql) return { matches: [], exact: false, total: 0, single: false };
+  if (!qf || !ql) return lookupOne(rsvps, qf || ql, cfg);
   const exact = [], fuzzy = [];
   for (const r of rsvps) {
     if ((sameNorm(r.firstNorm, qf) && sameNorm(r.lastNorm, ql)) || (sameNorm(r.firstNorm, ql) && sameNorm(r.lastNorm, qf))) {
@@ -362,13 +412,7 @@ export function lookup(rsvps, firstInput, lastInput, cfg = LOOKUP) {
       fuzzy.push({ r, score: similarity(qf + ' ' + ql, r.firstNorm + ' ' + r.lastNorm) });
     }
   }
-  const list = exact.length ? exact : fuzzy;
-  list.sort((a, b) =>
-    b.score - a.score ||
-    a.r.lastNorm.localeCompare(b.r.lastNorm) ||
-    a.r.firstNorm.localeCompare(b.r.firstNorm) ||
-    String(a.r.company ?? '').localeCompare(String(b.r.company ?? '')));
-  return { matches: list.slice(0, cfg.maxResults).map(x => x.r), exact: exact.length > 0 };
+  return rankMatches(exact, fuzzy, cfg);
 }
 
 export function findByEmail(rsvps, email) {

@@ -1,7 +1,7 @@
 // Open House kiosk — service worker. Caches the whole app so it runs with no network.
 // BUILD is a hash of every file in ASSETS. After changing any of them run `npm run stamp`
 // (a test fails until you do). A changed sw.js is what makes installed iPads pick up the new version.
-const BUILD = '8d84d515a5fa8';
+const BUILD = '066f7c0715c3d';
 const CACHE = 'oh-kiosk-' + BUILD;
 const ASSETS = [
   './',

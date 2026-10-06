@@ -169,20 +169,23 @@ function doLookup() {
   const box = $('#results');
   box.replaceChildren();
   blur();
-  if (!first || !last) { box.append(emptyBox('Please enter both your first and last name.')); return; }
-  const { matches, exact } = core.lookup(S.rsvps, first, last);
-  S.lookupName = { first, last };
+  if (!first && !last) { box.append(emptyBox('Please enter your first name, your last name, or both.')); return; }
+  const { matches, exact, total, single } = core.lookup(S.rsvps, first, last);
+  // carried to the new-guest form; a full name typed in the First name box is split into first and last
+  const words = first && !last ? first.split(/\s+/) : null;
+  S.lookupName = words && words.length > 1 ? { first: words.slice(0, -1).join(' '), last: words.at(-1) } : { first, last };
   if (!matches.length) {
     box.append(emptyBox(
-      "We couldn't find an RSVP under ", el('strong', { text: `${first} ${last}` }), '.',
+      "We couldn't find an RSVP under ", el('strong', { text: `${first} ${last}`.trim() }), '.',
       el('br'),
       el('button', { class: 'link', dataset: { action: 'go-walkin-carry' }, text: 'Not listed? Sign in as a new guest →' }),
     ));
     return;
   }
   const n = matches.length;
-  if (exact && n > 1) box.append(el('p', { class: 'hint', text: `We found ${n} people with that name. Please pick your company.` }));
-  else if (!exact) box.append(el('p', { class: 'hint', text: n === 1 ? 'We found a possible match. Please check it’s you.' : `We found ${n} possible matches. Please pick yours.` }));
+  if (exact && !single && total > 1) box.append(el('p', { class: 'hint', text: `We found ${total} people with that name. Please pick your company.` }));
+  else if (!exact || single) box.append(el('p', { class: 'hint', text: total === 1 ? 'We found a possible match. Please check it’s you.' : `We found ${total} possible matches. Please pick yours.` }));
+  if (total > n) box.append(el('p', { class: 'hint', text: `Showing the first ${n}. Type your first and last name to narrow the list.` }));
   for (const r of matches) {
     box.append(el('button', { class: 'result', dataset: { action: 'select', key: r.key } },
       el('span', {},
@@ -190,7 +193,7 @@ function doLookup() {
         r.company ? el('span', { class: 'co', text: r.company }) : null),
       el('span', { class: 'arrow', 'aria-hidden': 'true', text: '→' })));
   }
-  if (!exact) box.append(el('button', { class: 'link', dataset: { action: 'go-walkin-carry' }, text: 'Not you? Sign in as a new guest →' }));
+  if (!exact || single) box.append(el('button', { class: 'link', dataset: { action: 'go-walkin-carry' }, text: 'Not you? Sign in as a new guest →' }));
   box.firstElementChild?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
@@ -295,7 +298,8 @@ function goWalkin(carry) {
     $('#wl').value = S.lookupName.last;
   }
   show('walkin');
-  (carry && S.lookupName ? $('#we') : $('#wf')).focus();
+  // after a lookup, start at the first field still empty (one name may have been typed)
+  (carry && S.lookupName ? ['#wf', '#wl', '#we'].map(sel => $(sel)).find(i => !i.value) ?? $('#we') : $('#wf')).focus();
 }
 
 async function submitWalkin() {
